@@ -390,6 +390,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Смена профиля блокируется при несохранённых изменениях.</summary>
     public bool CanSwitchProfile => IsConnected && !HasUnsavedChanges && !IsBusy;
 
+    /// <summary>
+    /// Сопряжение с донглом: только при живой сессии через ресивер —
+    /// вендор (FormPair) не пускает в паринг по кабелю (isUSB -> Dialogs[46]).
+    /// </summary>
+    public bool CanPair => IsConnected && !_session.IsCable && !_session.PairingActive && !IsBusy;
+
     public int BatteryPercent
     {
         get => _batteryPercent;
@@ -1083,6 +1089,39 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         await _session.RescanAfterUsbEventAsync();
     }
 
+    /// <summary>
+    /// Сопряжение мыши с ресивером (2.4G Re-Pairing). Всё в фоне,
+    /// таймаут 30 с — внутри DeviceSession. При успехме перескан обновляет
+    /// сессию/статус на «Подключено (ресивер)».
+    /// </summary>
+    public async Task<PairResult> PairWithReceiverAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            StatusText = "Сопряжение с донглом…";
+            var result = await Task.Run(() => _session.PairWithReceiverAsync());
+
+            if (result == PairResult.Success)
+            {
+                // Мышь уже перепривязана — перескан подтвердит сессию
+                // и статус-бар обновится на «Подключено (ресивер)».
+                await _session.RescanAsync();
+                StatusText = ConnectionText;
+            }
+            else if (result != PairResult.Cancelled)
+            {
+                StatusText = ConnectionText;
+            }
+
+            return result;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private void OnFlashDataUpdated(FlashDataMap map) => RunOnUi(() =>
     {
         // Любое перечитывание флеша (старт, «Применить», смена профиля)
@@ -1697,6 +1736,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         OnPropertyChanged(nameof(CanApply));
         OnPropertyChanged(nameof(CanSwitchProfile));
+        OnPropertyChanged(nameof(CanPair));
     }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)

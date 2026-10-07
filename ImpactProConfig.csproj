@@ -17,7 +17,7 @@
     <RootNamespace>ImpactProConfig</RootNamespace>
     <AssemblyName>ImpactProConfig</AssemblyName>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <Version>1.1.6</Version>
+    <Version>1.1.7</Version>
     <Authors>ImpactProConfig</Authors>
     <Product>ARDOR GAMING Impact PRO Config</Product>
   </PropertyGroup>

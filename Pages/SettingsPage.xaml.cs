@@ -35,4 +35,18 @@ public partial class SettingsPage : Page
             mw.ViewModel.SelectedAccentIndex = index;
         }
     }
+
+    /// <summary>«Сопряжение с донглом»: модальный диалог 2.4G Re-Pairing.</summary>
+    private void Pairing_Click(object sender, RoutedEventArgs e)
+    {
+        if (Application.Current.MainWindow is not MainWindow mw)
+            return;
+
+        var dialog = new PairingDialog
+        {
+            Owner = mw,
+            DataContext = mw.ViewModel
+        };
+        dialog.ShowDialog();
+    }
 }

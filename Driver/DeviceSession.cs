@@ -30,6 +30,19 @@ public sealed class WriteResult
     public FlashDataMap VerifiedMap { get; init; }
 }
 
+/// <summary>Итог сопряжения мыши с ресивером (2.4G Re-Pairing).</summary>
+public enum PairResult
+{
+    Success,        // GetPairState вернул 3 (вендор: PairSuccess)
+    Fail,           // GetPairState вернул 2 (вендор: PairFail)
+    Timeout,        // 30 секунд без ответа
+    DeviceLost,     // донгл/устройство пропало из списка HID (Fail по FormPair)
+    NotConnected,   // нет активной сессии
+    WrongMode,      // подключение по кабелю — вендор разрешает только wireless
+    Cancelled,
+    Error
+}
+
 /// <summary>
 /// Сессия с мышью. ГАРАНТИЯ БЕЗОПАСНОСТИ:
 ///  - при старте выполняются ТОЛЬКО функции чтения (см. HidUsbNative);
@@ -103,6 +116,13 @@ public sealed class DeviceSession : IDisposable
     public event Action<DeviceStatusChanged>? StatusChanged;
     public event Action<byte>? ProfileChanged;        // id=14, индекс профиля 0..3
     public event Action<DeviceInfo>? DeviceInfoUpdated;   // id=16, CID/MID/DeviceType
+    public event Action<byte>? PairStateUpdated;          // id=6, сопряжение: 1=процесс, 2=fail, 3=success
+
+    /// <summary>CID/MID/тип последнего успешного чтения (команда 16). CID нужен для сопряжения.</summary>
+    public DeviceInfo Device { get; private set; }
+
+    /// <summary>true — идёт сопряжение: watchdog и пересканы подавлены, чтобы не рвать сессию.</summary>
+    public bool PairingActive => _pairingActive;
 
     public DeviceSession()
     {
@@ -131,7 +151,7 @@ public sealed class DeviceSession : IDisposable
     {
         try
         {
-            if (_rescanning || State == ConnectionState.Connecting)
+            if (_rescanning || _pairingActive || State == ConnectionState.Connecting)
                 return;
 
             string? preferred = FindDevice(out string pid);
@@ -338,6 +358,7 @@ public sealed class DeviceSession : IDisposable
                 if (_cidMidTcs!.Task is { IsCompletedSuccessfully: true } cidTask)
                 {
                     result.Device = cidTask.Result;
+                    Device = result.Device;
                     Log($"READ cidmid: CID={result.Device.CID} MID={result.Device.MID} type={result.Device.DeviceType}");
                     DeviceInfoUpdated?.Invoke(result.Device);
                 }
@@ -500,6 +521,14 @@ public sealed class DeviceSession : IDisposable
 
     private void OnUsbChangedEvent(bool plugged)
     {
+        // Во время сопряжения донгл может перечисляться заново — это не повод
+        // рвать сессию (вендор в FormPair гасит свои таймеры на это время).
+        if (_pairingActive)
+        {
+            Log($"usb: changed plugged={plugged} во время сопряжения — пропускаем");
+            return;
+        }
+
         // Вставка и извлечение обрабатываются одинаково: перескан сам решит,
         // что делать. Эндпоинт на месте -> дешёвый no-op; пропал -> полный
         // teardown и переключение на второй интерфейс (кабель <-> ресивер).
@@ -518,6 +547,10 @@ public sealed class DeviceSession : IDisposable
     /// </summary>
     public async Task RescanAsync(CancellationToken ct = default)
     {
+        // Сопряжение идёт: активная сессия не трогаем до его завершения.
+        if (_pairingActive)
+            return;
+
         // Не запускаем несколько пересканов одновременно.
         lock (_sync)
         {
@@ -641,6 +674,7 @@ public sealed class DeviceSession : IDisposable
     private const int MaxRetries = 5;
     private readonly SemaphoreSlim _connectLock = new(1, 1);
     private volatile bool _anyConnectAttempted; // была ли хоть одна попытка подключения
+    private volatile bool _pairingActive;       // идёт сопряжение: не рвём сессию пересканом
 
     /// <summary>
     /// Перескан по явному событию USB (WM_DEVICECHANGE / вендорский watcher).
@@ -651,6 +685,98 @@ public sealed class DeviceSession : IDisposable
     {
         _offlineEp = null;
         return RescanAsync(CancellationToken.None);
+    }
+
+    // ===== Сопряжение с ресивером (2.4G Re-Pairing) =====
+
+    /// <summary>
+    /// Сопряжение мыши с USB-ресивером. Путь 1-в-1 из FormPair (декомпилят):
+    ///  1) CS_UsbServer_EnterDonglePairOnlyCid(cid) — донгл входит в pairing mode;
+    ///  2) раз в секунду CS_UsbServer_ReadDonglePairStatus() — как PairingTimer вендора;
+    ///  3) ответ команды id=6 (GetPairState): data[0]=1 в процессе, 2 fail, 3 success;
+    ///  4) устройство пропало из списка HID -> DeviceLost (по PairingTimer_Tick).
+    /// Таймаут 30 с. Только фон (async). Сопряжение только в wireless-режиме:
+    /// вендор при кабеле (isUSB) не пускает в паринг (LanguageFile Dialogs[46]).
+    /// </summary>
+    public async Task<PairResult> PairWithReceiverAsync(CancellationToken ct = default)
+    {
+        if (State != ConnectionState.ConnectedReadOnly)
+        {
+            Log("pair: нет активной сессии");
+            return PairResult.NotConnected;
+        }
+
+        if (IsCable)
+        {
+            Log("pair: активен кабель — сопряжение только через ресивер (wireless mode)");
+            return PairResult.WrongMode;
+        }
+
+        // CID продукта из команды 16. Если чтение не ответило — вендорский
+        // дефолт Config.ini: Impact PRO16 -> CID = 16.
+        if (Device.CID == 0)
+            Log("pair: CID не прочитан — используем продуктовый CID из Config.ini");
+        byte cid = Device.CID != 0 ? Device.CID : Services.MouseSkin.ExpectedCid;
+
+        _pairingActive = true;
+        try
+        {
+            var done = new TaskCompletionSource<byte>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            void OnPairState(byte s)
+            {
+                if (s == 2 || s == 3)
+                    done.TrySetResult(s);          // 2 = Fail, 3 = Success
+            }
+
+            PairStateUpdated += OnPairState;
+            try
+            {
+                Log($"pair: EnterDonglePairOnlyCid(cid={cid})");
+                HidUsbNative.CS_UsbServer_EnterDonglePairOnlyCid(cid);
+
+                long deadline = Environment.TickCount64 + 30_000;
+                while (true)
+                {
+                    await Task.Delay(1000, ct).ConfigureAwait(false);
+
+                    if (done.Task.IsCompleted)
+                        return done.Task.Result == 3 ? PairResult.Success : PairResult.Fail;
+
+                    if (Environment.TickCount64 >= deadline)
+                    {
+                        Log("pair: таймаут 30 с");
+                        return PairResult.Timeout;
+                    }
+
+                    if (FindDevice(out _) == null)
+                    {
+                        Log("pair: устройство пропало из списка HID");
+                        return PairResult.DeviceLost;
+                    }
+
+                    HidUsbNative.CS_UsbServer_ReadDonglePairStatus();
+                }
+            }
+            finally
+            {
+                PairStateUpdated -= OnPairState;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return PairResult.Cancelled;
+        }
+        catch (Exception ex)
+        {
+            Log($"pair: исключение {ex.GetType().Name}: {ex.Message}");
+            return PairResult.Error;
+        }
+        finally
+        {
+            _pairingActive = false;
+        }
     }
 
     // ===== Разбор ответов — 1-в-1 по логике FormMain.onUsbDataReceived =====
@@ -716,8 +842,19 @@ public sealed class DeviceSession : IDisposable
             case UsbCommandID.ReadCIDMID:
                 var info = HidUsbNative.ParseCidMid(data);
                 Log($"READ cidmid: CID={info.CID} MID={info.MID} type={info.DeviceType}");
+                Device = info;
                 _cidMidTcs?.TrySetResult(info);
                 DeviceInfoUpdated?.Invoke(info);
+                break;
+
+            case UsbCommandID.GetPairState:
+                // Ответ ReadDonglePairStatus (FormPair.PairingUsbDataReceived):
+                // data[0]: 1 = в процессе, 2 = fail, 3 = success.
+                if (data.Length >= 1)
+                {
+                    Log($"pair: GetPairState -> {data[0]}");
+                    PairStateUpdated?.Invoke(data[0]);
+                }
                 break;
 
             case UsbCommandID.ReadVersionID:

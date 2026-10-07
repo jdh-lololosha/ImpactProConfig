@@ -72,6 +72,15 @@ public static class HidUsbNative
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
     public static extern void CS_UsbServer_ReadLedBar();
 
+    // Сопряжение с ресивером 2.4G (Re-Pairing) — из декомпилята DriverLib/UsbServer.cs:
+    // FormPair.DongleEnterPairing -> EnterDonglePairOnlyCid(cid), далее опрос
+    // ReadDonglePairStatus() каждую секунду (ответ команды id=6 GetPairState).
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void CS_UsbServer_EnterDonglePairOnlyCid(byte cid);
+
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void CS_UsbServer_ReadDonglePairStatus();
+
     #endregion
 
     /// <summary>Смена активного профиля — команда устройству (не запись во флеш).</summary>

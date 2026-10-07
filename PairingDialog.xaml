@@ -1,0 +1,100 @@
+<ui:FluentWindow x:Class="ImpactProConfig.PairingDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Сопряжение с донглом"
+        Icon="pack://application:,,,/Assets/app.ico"
+        Width="540"
+        Height="420"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        WindowBackdropType="Mica"
+        ExtendsContentIntoTitleBar="True"
+        ShowInTaskbar="False">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0"
+                     Title="Сопряжение с донглом"
+                     ShowMaximize="False"
+                     ShowMinimize="False" />
+
+        <!-- Шаг 1/2 + кнопка старта -->
+        <StackPanel x:Name="StepsPanel"
+                    Grid.Row="1"
+                    Margin="24,8,24,8">
+            <TextBlock Text="Сопряжение с ресивером 2.4G"
+                       FontSize="18"
+                       FontWeight="SemiBold" />
+            <TextBlock Text="Шаг 1. Убедитесь, что USB-ресивер вставлен в компьютер."
+                       Margin="0,16,0,0"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="Шаг 2. Переведите мышь в режим сопряжения: зажмите ЛКМ + СКМ (колесо) + ПКМ на 3–5 секунд, пока индикатор не начнёт быстро мигать."
+                       Margin="0,10,0,0"
+                       TextWrapping="Wrap"
+                       Opacity="0.85" />
+            <TextBlock Text="Сопряжение работает только при подключении через ресивер — отключите кабель."
+                       Margin="0,16,0,0"
+                       TextWrapping="Wrap"
+                       Opacity="0.6" />
+            <ui:Button x:Name="StartButton"
+                       Content="Начать сопряжение"
+                       Appearance="Primary"
+                       HorizontalAlignment="Left"
+                       Margin="0,20,0,0"
+                       MinWidth="180"
+                       Click="StartButton_Click" />
+        </StackPanel>
+
+        <!-- Прогресс -->
+        <StackPanel x:Name="ProgressPanel"
+                    Grid.Row="1"
+                    Margin="24,8,24,8"
+                    Visibility="Collapsed">
+            <TextBlock x:Name="ProgressText"
+                       Text="Ожидание подключения мыши (таймаут 30 сек)..."
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       TextWrapping="Wrap"
+                       Margin="0,40,0,0" />
+            <ProgressBar x:Name="ProgressBar"
+                         Height="6"
+                         Minimum="0"
+                         Maximum="100"
+                         Margin="0,18,0,0" />
+            <TextBlock Text="Держите ЛКМ + СКМ + ПКМ зажатыми, пока мышь не свяжется с донглом."
+                       Margin="0,12,0,0"
+                       TextWrapping="Wrap"
+                       Opacity="0.7" />
+        </StackPanel>
+
+        <!-- Итог -->
+        <StackPanel x:Name="ResultPanel"
+                    Grid.Row="1"
+                    Margin="24,8,24,8"
+                    Visibility="Collapsed">
+            <TextBlock x:Name="ResultText"
+                       FontSize="17"
+                       FontWeight="SemiBold"
+                       TextWrapping="Wrap"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Margin="0,80,0,0" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2"
+                    Margin="24,0,24,18"
+                    HorizontalAlignment="Right">
+            <ui:Button x:Name="CloseButton"
+                       Content="Закрыть"
+                       IsEnabled="False"
+                       MinWidth="110"
+                       Click="CloseButton_Click" />
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

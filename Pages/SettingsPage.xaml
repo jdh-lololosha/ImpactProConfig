@@ -139,6 +139,27 @@
                 </StackPanel>
             </ui:Card>
 
+            <!-- Сопряжение с донглом (2.4G Re-Pairing) -->
+            <ui:Card Padding="18" Margin="0,14,0,0">
+                <StackPanel>
+                    <TextBlock Text="Сопряжение с донглом"
+                               FontWeight="SemiBold"
+                               FontSize="15"
+                               Margin="0,0,0,4" />
+                    <TextBlock Text="Привязка мыши к USB-ресиверу 2.4G. Доступно только при подключении через ресивер (без кабеля)."
+                               Opacity="0.5"
+                               FontSize="11"
+                               Margin="0,0,0,10"
+                               TextWrapping="Wrap" />
+                    <ui:Button Content="Сопряжение с донглом"
+                               Appearance="Secondary"
+                               HorizontalAlignment="Left"
+                               MinWidth="180"
+                               IsEnabled="{Binding CanPair}"
+                               Click="Pairing_Click" />
+                </StackPanel>
+            </ui:Card>
+
             <!-- Телеметрия батареи -->
             <ui:Card Grid.Column="0" Padding="18" Margin="0,14,0,0">
                 <StackPanel>
