@@ -415,6 +415,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Тип подключения: true — приёмник 2.4G, false — кабель Type-C.</summary>
     public bool IsWireless => _session.ConnectedPid == DeviceSession.ReceiverPid;
 
+    /// <summary>true — активен кабель (провод): зарядка и приоритетный канал.</summary>
+    public bool IsWired => _session.IsCable;
+
     /// <summary>Человекочитаемый статус подключения для статус-бара.</summary>
     public string ConnectionText => _session.ConnectedPid switch
     {
@@ -463,8 +466,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         private set => Set(ref _updateMessage, value);
     }
 
-    /// <summary>Ссылка на .msi из релиза (null — установщик приложен не был).</summary>
+    /// <summary>Ссылка на .zip из релиза (null — ассет приложен не был).</summary>
     public string? UpdateDownloadUrl { get; private set; }
+
+    /// <summary>Просьба закрыть приложение (после запуска портативного обновления).</summary>
+    public event Action? ExitRequested;
 
     private bool _isUpdateAvailable;
     private string _updateMessage = string.Empty;
@@ -479,11 +485,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (info is not { Available: true })
             return;
 
-        // Релиз без .msi показать можно, но кнопка «Скачать» поведёт в никуда —
+        // Релиз без .zip показать можно, но кнопка «Скачать» поведёт в никуда —
         // в этом случае молча выходим, лучше без плашки.
         if (string.IsNullOrEmpty(info.Url))
         {
-            App.Log($"UpdateCheck: найден {info.Tag}, но .msi в релизе нет");
+            App.Log($"UpdateCheck: найден {info.Tag}, но .zip в релизе нет");
             return;
         }
 
@@ -492,7 +498,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         IsUpdateAvailable = true;
     }
 
-    /// <summary>Скачать .msi и запустить установку (фон, потом показываем прогресс).</summary>
+    /// <summary>
+    /// Портативное обновление: скачать .zip, распаковать, запустить
+    /// скрипт-обновитель и выйти — тот заменит файлы и перезапустит exe.
+    /// </summary>
     public async Task InstallUpdateAsync()
     {
         string? url = UpdateDownloadUrl;
@@ -503,8 +512,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         StatusText = "Загрузка обновления…";
         try
         {
-            await UpdateService.DownloadAndInstallAsync(url);
-            StatusText = "Запущен установщик. Закройте приложение для завершения.";
+            await UpdateService.DownloadAndUpdateAsync(url);
+            StatusText = "Обновление скачано. Перезапуск…";
+            ExitRequested?.Invoke();
         }
         catch (Exception ex)
         {
@@ -954,15 +964,22 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             var result = await _session.ConnectReadOnlyAsync();
             if (result == null)
             {
+                // Возможна гонка: сессию параллельно подключили watchdog или
+                // USB-событие — тогда статус уже «Подключено», не «не найдена».
+                if (_session.State == ConnectionState.ConnectedReadOnly)
+                {
+                    StatusText = ConnectionText;
+                    _ = RefreshDongleVersionAsync();
+                    return;
+                }
+
                 StatusText = "Мышь не найдена. Подключите кабель или ресивер.";
                 return;
             }
 
             ApplyBattery(result.Battery);
             MouseVersionText = FormatVersion(result.Version);
-            StatusText = _session.ConnectedPid == DeviceSession.Pids[0]
-                ? "Подключено (ресивер)"
-                : "Подключено (кабель)";
+            StatusText = ConnectionText;   // «Подключено (провод)» / «Подключено (ресивер)»
 
             _ = RefreshDongleVersionAsync();
         }
@@ -1014,10 +1031,24 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             StatusText = "Переподключение…";
         else if (state == ConnectionState.Error)
             StatusText = "Таймаут чтения состояния мыши.";
+        else if (state == ConnectionState.ConnectedReadOnly)
+            StatusText = ConnectionText;   // «Подключено (провод)» / «Подключено (ресивер)»
 
+        // Мгновенное обновление статус-бара и шапки при горячем переключении.
         OnPropertyChanged(nameof(ConnectionText));
+        OnPropertyChanged(nameof(IsWireless));
+        OnPropertyChanged(nameof(IsWired));
         OnPropertyChanged(nameof(HighRatesAllowed));
         OnPropertyChanged(nameof(MaxReportRate));
+
+        // На ресивере зарядки нет: убираем ⚡ сразу, не дожидаясь свежего
+        // battery-push (иначе индикатор залипает от прошлой сессии на проводе).
+        if (state == ConnectionState.ConnectedReadOnly && !_session.IsCable && _isCharging)
+        {
+            IsCharging = false;
+            OnPropertyChanged(nameof(BatteryText));
+        }
+
         EnforceRateLimit();
     });
 
@@ -1044,11 +1075,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>
     /// Быстрый перескан устройств (хот-плаг). Вызывается из MainWindow по
-    /// WM_DEVICECHANGE и из DeviceSession по событию вендорского watcher'а.
+    /// WM_DEVICECHANGE. Сбрасывает memo OFFLINE и запускает честный перескан
+    /// с приоритетом кабеля.
     /// </summary>
     public async Task RescanAsync()
     {
-        await _session.RescanAsync(CancellationToken.None);
+        await _session.RescanAfterUsbEventAsync();
     }
 
     private void OnFlashDataUpdated(FlashDataMap map) => RunOnUi(() =>
@@ -1173,7 +1205,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         int level = _batteryPercent;
         bool charging = _isCharging;
-        string connection = _session.ConnectedPid == DeviceSession.Pids[0]
+        string connection = _session.ConnectedPid == DeviceSession.ReceiverPid
             ? "📡 Беспроводной (2.4G)"
             : _session.ConnectedPid != null
                 ? "🔌 Кабель (Type-C)"

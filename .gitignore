@@ -15,3 +15,5 @@ build/
 
 # Локальные настройки приложения (пишутся рядом с exe, т.е. в bin/)
 app_settings.json
+*-Portable.zip
+*.zip

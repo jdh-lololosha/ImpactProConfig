@@ -108,6 +108,78 @@ public sealed class DeviceSession : IDisposable
     {
         _dataReceived = OnUsbDataReceived;
         _usbChanged = OnUsbChangedEvent;
+
+        // Watchdog хот-плага: страховка на случай, если WM_DEVICECHANGE и
+        // вендорский watcher не пришли (или пришли раньше, чем HID-список
+        // обновился). Раз в секунду сверяем активный эндпоинт с реальным
+        // списком устройств (только presence через SetupAPI — безопасно
+        // при активной сессии).
+        _watchdog = new System.Threading.Timer(
+            _ => WatchdogTick(), null,
+            TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1));
+    }
+
+    private readonly System.Threading.Timer _watchdog;
+
+    /// <summary>
+    /// Периодическая сверка «что подключено на самом деле».
+    ///  - активный эндпоинт пропал из списка -> Reconnecting + перескан;
+    ///  - появился более приоритетный кабель при активном ресивере -> перескан;
+    ///  - устройство появилось без USB-события (пропущенный DBT) -> перескан.
+    /// </summary>
+    private void WatchdogTick()
+    {
+        try
+        {
+            if (_rescanning || State == ConnectionState.Connecting)
+                return;
+
+            string? preferred = FindDevice(out string pid);
+
+            if (State == ConnectionState.ConnectedReadOnly)
+            {
+                // Всё честно: активный эндпоинт по-прежнему в списке,
+                // и FindDevice (кабель первым) возвращает именно его.
+                if (preferred != null &&
+                    string.Equals(Endpoint, preferred, StringComparison.Ordinal) &&
+                    string.Equals(pid, ConnectedPid, StringComparison.Ordinal))
+                    return;
+
+                Log($"watchdog: активный ep пропал (был {ConnectedPid}, сейчас {pid ?? "никого"}) -> Reconnecting");
+                SetState(ConnectionState.Reconnecting);
+                _ = Task.Run(() => RescanAsync(CancellationToken.None));
+                return;
+            }
+
+            if (State == ConnectionState.Reconnecting)
+            {
+                // Застряли в переподключении без активного рескана — толкаем.
+                _ = Task.Run(() => RescanAsync(CancellationToken.None));
+                return;
+            }
+
+            // Disconnected/Error: устройство появилось, а события USB не пришло.
+            // До ПЕРВОЙ попытки подключения не лезем: иначе watchdog на старте
+            // гонится с InitializeAsync и делает второй Start на том же хэндле.
+            // И не лезем, если это тот же эндпоинт, где мышь уже была OFFLINE —
+            // иначе статус бы мигал «Подключение…/Отключено» каждые секунды.
+            if (preferred != null &&
+                _anyConnectAttempted &&
+                !string.Equals(preferred, _offlineEp, StringComparison.Ordinal) &&
+                Environment.TickCount64 - _lastRescan > 3000)
+            {
+                Log($"watchdog: pid={pid} появился без события USB -> Rescan");
+                _ = Task.Run(() => RescanAsync(CancellationToken.None));
+            }
+        }
+        catch (DllNotFoundException)
+        {
+            // hidusb.dll нет — не крашим фоновый поток.
+        }
+        catch (Exception ex)
+        {
+            Log($"watchdog: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private void SetState(ConnectionState s)
@@ -164,33 +236,56 @@ public sealed class DeviceSession : IDisposable
     /// <summary>
     /// Безопасное подключение: только чтение состояния и флеша.
     /// Полностью в фоне (вызывать из Task.Run).
+    ///
+    /// Сериализация обязательна: watchdog, USB-события и InitializeAsync могут
+    /// прийти одновременно, а двойной Start на одном хэндле повреждает сессию
+    /// вендорской библиотеки (в логе это выглядело как два Connecting подряд).
     /// </summary>
     public async Task<FlashReadResult?> ConnectReadOnlyAsync(CancellationToken ct = default)
     {
-        SetState(ConnectionState.Connecting);
-
-        return await Task.Run(() =>
+        await _connectLock.WaitAsync(ct);
+        try
         {
+            _anyConnectAttempted = true;
+
+            // Уже живая сессия — повторный Start не нужен.
+            if (_started && State == ConnectionState.ConnectedReadOnly)
+            {
+                Log("connect: сессия уже активна — повторный Start пропущен");
+                return null;
+            }
+
+            SetState(ConnectionState.Connecting);
+
+            return await Task.Run(() =>
+            {
             string? endpoint = FindDevice(out string pid);
             if (endpoint == null)
             {
                 Log("scan: устройство 3554:F53C/F59A не найдено");
+                StopInternal();                     // чистим даже то, что было раньше
                 SetState(ConnectionState.Disconnected);
                 return null;
             }
 
-            Endpoint = endpoint;
-            ConnectedPid = pid;
             Log($"scan: найдено pid={pid} ep={endpoint}");
 
             // Официальная последовательность (FormMain.DeviceConnect), только чтение.
             if (!HidUsbNative.IsOnLine(endpoint))
             {
-                // Ресивер есть, но мышь не онлайн — это не ошибка, просто не подключаемся.
+                // Эндпоинт есть, но мышь не онлайн — это не ошибка, просто не
+                // подключаемся. Главное: НЕ помечаем сессию как «подключённую» —
+                // иначе статус соврёт (залипший «провод» при мёртвом кабеле).
                 Log("scan: устройство найдено, но мышь OFFLINE");
+                _offlineEp = endpoint;              // не пытаемся переподключаться по таймеру
+                StopInternal();
                 SetState(ConnectionState.Disconnected);
                 return null;
             }
+
+            // Живой эндпоинт подтверждён — только теперь идентифицируем сессию.
+            Endpoint = endpoint;
+            ConnectedPid = pid;
             Log("scan: мышь ONLINE -> Start(только чтение)");
 
             _flashTcs = new TaskCompletionSource<FlashReadResult>(
@@ -229,6 +324,8 @@ public sealed class DeviceSession : IDisposable
                 var flashTask = _flashTcs.Task;
                 if (!flashTask.Wait(ReadTimeoutMs, ct))
                 {
+                    Log("scan: таймаут чтения флеша -> teardown");
+                    StopInternal();                 // не оставляем мёртвый хэндл
                     SetState(ConnectionState.Error);
                     return null;
                 }
@@ -250,6 +347,7 @@ public sealed class DeviceSession : IDisposable
                 }
 
                 FlashData = result.Map;
+                _offlineEp = null;
                 SetState(ConnectionState.ConnectedReadOnly);
                 FlashDataUpdated?.Invoke(result.Map);
                 return result;
@@ -264,7 +362,12 @@ public sealed class DeviceSession : IDisposable
                 SetState(ConnectionState.Error);
                 return null;
             }
-        }, ct);
+            }, ct);
+        }
+        finally
+        {
+            _connectLock.Release();
+        }
     }
 
     /// <summary>
@@ -397,24 +500,21 @@ public sealed class DeviceSession : IDisposable
 
     private void OnUsbChangedEvent(bool plugged)
     {
-        if (!plugged && _started)
-        {
-            // Мышь выдернули — не крашим процесс, а переводим сессию в поиск
-            // активного эндпоинта. Если остался второй интерфейс (кабель/ресивер),
-            // переключение произойдёт бесшовно.
-            Log("usb: устройство отключено -> Reconnecting");
-            SetState(ConnectionState.Reconnecting);
-            _ = Task.Run(() => RescanAsync(CancellationToken.None));
-        }
+        // Вставка и извлечение обрабатываются одинаково: перескан сам решит,
+        // что делать. Эндпоинт на месте -> дешёвый no-op; пропал -> полный
+        // teardown и переключение на второй интерфейс (кабель <-> ресивер).
+        Log($"usb: changed plugged={plugged} -> Rescan");
+        _ = Task.Run(() => RescanAfterUsbEventAsync());
     }
 
     /// <summary>
-    /// Быстрый фоновый перескан устройств. Вызывается по WM_DEVICECHANGE и по
-    /// событию от вендорского watcher'а. Не блокирует UI.
+    /// Быстрый фоновый перескан устройств. Вызывается по WM_DEVICECHANGE, по
+    /// вендорскому watcher'у и по watchdog'у. Не блокирует UI.
     ///
-    /// Логика приоритета: если подключены оба интерфейса — выбираем кабель.
-    /// Если активный эндпоинт исчез, но есть второй — переключаемся на него.
-    /// Если оба пропали — ждём появления любого.
+    /// Честный алгоритм (приоритет кабеля):
+    ///  1. Есть F59A (провод) -> подключаемся к нему, статус «провод», зарядка.
+    ///  2. F59A нет/не отвечает -> пробуем F53C (ресивер) -> «ресивер», 1000 Гц.
+    ///  3. Ничего нет -> полный teardown, статус «Отключено».
     /// </summary>
     public async Task RescanAsync(CancellationToken ct = default)
     {
@@ -424,45 +524,74 @@ public sealed class DeviceSession : IDisposable
             if (_rescanning)
                 return;
             _rescanning = true;
+            _lastRescan = Environment.TickCount64;
         }
 
         try
         {
-            // Короткая задержка: после выдёргивания кабеля эндпоинт ещё может
-            // быть в списке, но уже не отвечать. Даём Windows время на обработку.
+            // Короткая задержка: сразу после DBT_DEVICEREMOVECOMPLETE HID-список
+            // может быть ещё не обновлен. Даём Windows время на обработку.
             await Task.Delay(150, ct);
 
+            // FindDevice перебирает Pids = {F59A, F53C}: кабель первым.
+            // Presence-проверка через SetupAPI: выдернутый кабель в списке уже
+            // не значится — старый хэндл честно закрываем ниже.
             string? endpoint = FindDevice(out string pid);
             if (endpoint == null)
             {
-                if (State != ConnectionState.Disconnected)
+                if (State != ConnectionState.Disconnected || ConnectedPid != null || Endpoint != null)
                 {
-                    Log("rescan: устройство не найдено -> Disconnected");
+                    Log("rescan: ни кабеля, ни ресивера -> teardown + Disconnected");
+                    StopInternal();                 // закрыть хэндл, обнулить ConnectedPid
                     SetState(ConnectionState.Disconnected);
                 }
+                _offlineEp = null;
+                _retries = 0;
                 return;
             }
 
-            // Уже подключены к этому эндпоинту — перезапуск не нужен.
+            // Предпочтительный эндпоинт уже активен — перезапуск не нужен.
             if (State == ConnectionState.ConnectedReadOnly &&
-                string.Equals(Endpoint, endpoint, StringComparison.Ordinal))
+                string.Equals(Endpoint, endpoint, StringComparison.Ordinal) &&
+                string.Equals(pid, ConnectedPid, StringComparison.Ordinal))
             {
                 return;
             }
 
-            Log($"rescan: найден pid={pid} ep={endpoint} (было: {ConnectedPid})");
+            Log($"rescan: найден pid={pid} ep={endpoint} (был: {ConnectedPid ?? "никого"})");
             ReconnectCount++;
+            if (State == ConnectionState.ConnectedReadOnly)
+                SetState(ConnectionState.Reconnecting);
 
-            // Переподключение: закрываем старую сессию и открываем новую.
+            // Полный teardown старой сессии: хэндл закрыт, ConnectedPid=null.
             StopInternal();
+
             var result = await ConnectReadOnlyAsync(ct);
-            if (result == null && State != ConnectionState.Disconnected)
+            if (result != null)
             {
-                // Не удалось — пробуем ещё раз через паузу, но не вечно.
-                Log("rescan: переподключение не удалось, повтор через 1 с");
-                await Task.Delay(1000, ct);
-                _ = Task.Run(() => RescanAsync(CancellationToken.None));
+                _retries = 0;
+                return;
             }
+
+            // Другой поток успел подключить сессию параллельно — она здорова.
+            if (State == ConnectionState.ConnectedReadOnly)
+            {
+                _retries = 0;
+                return;
+            }
+
+            // Не подключились: Disconnected (устройства/мышь нет) — ждём нового
+            // события; прочие состояния — ограниченная серия повторов.
+            if (State == ConnectionState.Disconnected || _retries++ >= MaxRetries)
+            {
+                Log($"rescan: переподключение не удалось (попытка {_retries}) — ждём события USB");
+                _retries = 0;
+                return;
+            }
+
+            Log("rescan: повтор через 1 с");
+            await Task.Delay(1000, ct);
+            _ = Task.Run(() => RescanAsync(CancellationToken.None));
         }
         catch (OperationCanceledException)
         {
@@ -484,23 +613,45 @@ public sealed class DeviceSession : IDisposable
     /// <summary>Закрыть текущую USB-сессию без изменения состояния (для переподключения).</summary>
     private void StopInternal()
     {
-        if (!_started)
-            return;
-        try
+        if (_started)
         {
-            HidUsbNative.CS_UsbServer_SetPCDriverStatus(false);
-            HidUsbNative.Exit();
+            try
+            {
+                HidUsbNative.CS_UsbServer_SetPCDriverStatus(false);
+                HidUsbNative.Exit();
+            }
+            catch
+            {
+                // Ошибки закрытия не критичны.
+            }
+            _started = false;
         }
-        catch
-        {
-            // Ошибки закрытия не критичны.
-        }
-        _started = false;
+
+        // Очищаем идентификацию сессии ВСЕГДА, даже если хэндл уже закрыт или
+        // никогда не открывался. Иначе ConnectedPid остаётся=F59A после смерти
+        // кабеля и ConnectionText залипает в «Подключено (провод)».
         Endpoint = null;
         ConnectedPid = null;
     }
 
     private bool _rescanning;
+    private int _retries;                       // неудачные попытки переподключения
+    private long _lastRescan;                   // TickCount64 последнего перескана
+    private string? _offlineEp;                 // эндпоинт, где мышь была OFFLINE
+    private const int MaxRetries = 5;
+    private readonly SemaphoreSlim _connectLock = new(1, 1);
+    private volatile bool _anyConnectAttempted; // была ли хоть одна попытка подключения
+
+    /// <summary>
+    /// Перескан по явному событию USB (WM_DEVICECHANGE / вендорский watcher).
+    /// Сбрасывает memo OFFLINE: после физической вставки пробуем снова,
+    /// даже если раньше на этом эндпоинте мышь была не онлайн.
+    /// </summary>
+    public Task RescanAfterUsbEventAsync()
+    {
+        _offlineEp = null;
+        return RescanAsync(CancellationToken.None);
+    }
 
     // ===== Разбор ответов — 1-в-1 по логике FormMain.onUsbDataReceived =====
 
@@ -638,6 +789,15 @@ public sealed class DeviceSession : IDisposable
         if (_disposed)
             return;
         _disposed = true;
+
+        try
+        {
+            _watchdog.Dispose();
+        }
+        catch
+        {
+            // Таймер не критичен.
+        }
 
         StopInternal();
 

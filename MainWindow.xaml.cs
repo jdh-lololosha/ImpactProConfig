@@ -149,14 +149,21 @@ public partial class MainWindow : FluentWindow
         Closing += OnClosing;
 
         // --- Hot-Plug: перехват WM_DEVICECHANGE ---
-        // При вставке/извлечении USB (DBT_DEVICEARRIVAL / DBT_DEVICEREMOVECOMPLETE)
-        // запускаем быстрый перескан устройств. Это даёт бесшовное переключение
-        // кабель <-> ресивер без перезапуска приложения.
+        // Перехват вешаем НА САМО ОКНО приложения: broadcast DBT-сообщения
+        // уходят только top-level окнам, а отдельное невидимое HwndSource-окно
+        // их не получало — отсюда залипание статуса при выдёргивании кабеля.
         SourceInitialized += (_, _) =>
         {
-            _hwndSource = new HwndSource(0, 0, 0, 0, 0, "ImpactProConfig", IntPtr.Zero);
-            _hwndSource.AddHook(WndProc);
+            var hwnd = new WindowInteropHelper(this).Handle;
+            _hwndSource = HwndSource.FromHwnd(hwnd);
+            _hwndSource?.AddHook(WndProc);
+            LogUi($"WM_DEVICECHANGE hook installed hwnd=0x{hwnd.ToInt64():X}");
         };
+
+        // --- Портативное самообновление ---
+        // После скачивания .zip и запуска скрипта-обновителя приложение
+        // обязано ВЫЙТИ (файлы заняты), иначе копирование не перезапишет exe.
+        _viewModel.ExitRequested += RequestExit;
 
         // --- Трей ---
         // Сворачивание прячет окно в трей, а «закрытие» крестиком тоже сворачивает,

@@ -1,5 +1,5 @@
-# Создаёт GitHub release через REST API и прикрепляет MSI-файл.
-# Версия берётся из csproj — того же источника, что и у сборщика MSI.
+# Создаёт GitHub release через REST API и прикрепляет портативный ZIP-архив.
+# Версия берётся из csproj — того же источника, что и у сборщика build-portable.ps1.
 param(
     [string]$Token     = $env:GH_TOKEN,
     [string]$Repo      = 'jdh-lololosha/ImpactProConfig',
@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 
 $csprojPath = Join-Path $PSScriptRoot 'ImpactProConfig.csproj'
 [xml]$csproj = Get-Content -LiteralPath $csprojPath
-# Текст версии берём терпимо к типу узла, индексация не годится (см. build-installer.ps1).
+# Текст версии берём терпимо к типу узла, индексация не годится (см. build-portable.ps1).
 $versionText = $csproj.Project.PropertyGroup.Version |
     Where-Object { if ($_ -is [string]) { $_.Trim() } else { $_ -and $_.InnerText.Trim() } } |
     Select-Object -First 1
@@ -21,10 +21,10 @@ $version = $version.Trim() -replace '^v', ''
 
 $Tag       = "v$version"
 $Title     = "$Tag - Official Release"
-$MsiPath   = Join-Path $PSScriptRoot "ImpactProConfig-v$version-Setup.msi"
-Write-Host "RELEASE_TARGET tag=$Tag msi=$MsiPath"
+$ZipPath   = Join-Path $PSScriptRoot "ImpactProConfig-v$version-Portable.zip"
+Write-Host "RELEASE_TARGET tag=$Tag zip=$ZipPath"
 if (-not $Token) { throw 'No token (GH_TOKEN)' }
-if (-not (Test-Path $MsiPath)) { throw "MSI not found: $MsiPath" }
+if (-not (Test-Path $ZipPath)) { throw "ZIP not found: $ZipPath" }
 
 # Windows PowerShell 5.1 по умолчанию может не включать TLS1.2.
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
@@ -55,7 +55,7 @@ if (-not $release) {
 }
 
 # 3. Удалить старый ассет с тем же именем (идемпотентность).
-$assetName = Split-Path $MsiPath -Leaf
+$assetName = Split-Path $ZipPath -Leaf
 foreach ($a in @($release.assets)) {
     if ($a.name -eq $assetName) {
         Invoke-RestMethod -Method Delete -Uri "https://api.github.com/repos/$Repo/releases/assets/$($a.id)" -Headers $headers | Out-Null
@@ -63,14 +63,14 @@ foreach ($a in @($release.assets)) {
     }
 }
 
-# 4. Загрузить MSI.
+# 4. Загрузить ZIP.
 $uploadUrl = ($release.upload_url -split '\{')[0]
-$size = (Get-Item $MsiPath).Length
+$size = (Get-Item $ZipPath).Length
 $resp = Invoke-RestMethod -Method Post `
     -Uri "$uploadUrl`?name=$([Uri]::EscapeDataString($assetName))" `
     -Headers $headers `
     -ContentType 'application/octet-stream' `
-    -InFile $MsiPath
+    -InFile $ZipPath
 Write-Host "ASSET_UPLOADED id=$($resp.id) name=$($resp.name) size=$($resp.size) (expected=$size)"
 if ($resp.size -ne $size) { throw "Asset size mismatch: $($resp.size) != $size" }
 

@@ -24,7 +24,7 @@ Unofficial configuration utility for the **ARDOR GAMING Impact PRO** gaming mous
 - **No flash writes at startup** — the mouse is written to only when you press **Apply**; all other changes are local.
 - **Live battery tray icon** — the taskbar icon is drawn in real time: a colour-coded charge bar (green / yellow / red) with a bolt while charging. Hover tooltip reads `Impact PRO: [XX]% • Wireless/Wired`. Right-click menu: Open, Profile 1..4, Exit.
 - **Battery telemetry** — discharge history is recorded to `battery_stats.json`, giving a measured drain rate in %/h and an estimate like `~12 h active gaming`. Both come from actual observations, not a hardcoded table; until the mouse has discharged, the card says more data is needed.
-- **In-app updates** — a background check against the GitHub Releases API. If a newer tag exists, an InfoBar offers **Download and update**, which fetches the `.msi` from the release and starts the installer.
+- **In-app updates** — a background check against the GitHub Releases API. If a newer tag exists, an InfoBar offers **Download and update**, which fetches the portable `.zip` from the release, unpacks it, replaces the app files and restarts — no installer, no admin rights.
 - **Theme accents** — five accent palettes (Ardor Red, Sakura Pink, Cyberpunk Cyan, Toxic Green, Deep Violet). Sliders, the active-DPI frame, the mouse podium glow and buttons repaint instantly.
 - **Mouse body image** — pick Black / White / Pink, or let **Auto** follow the device's MID. The image on the Buttons tab and the podium glow switch immediately.
 - **Hot-plug cable ↔ receiver** — plugging or unplugging the USB cable switches the active connection in the background without restarting. When both interfaces are present the cable wins (charging + no radio overhead); pulling it falls back to the 2.4G receiver. The status bar reads `Подключено (провод)` / `Подключено (ресивер)`, and 2000/4000 Hz report rates are only offered on cable.
@@ -42,13 +42,9 @@ The vendor treats `dev1` / `dev2` / `dev3` as **Config.ini slots, not colours**.
 
 ### Installation
 
-Download **ImpactProConfig-v1.1.0-Setup.msi** from the [Releases](../../releases) page and run it. The installer creates:
+Download **ImpactProConfig-v1.1.5-Portable.zip** from the [Releases](../../releases) page and extract it anywhere (a folder of your choice — no admin rights, nothing is written to `Program Files` or the registry). Run `ImpactProConfig.exe`.
 
-- the application in `Program Files` (or per-user location),
-- a desktop shortcut,
-- a Start Menu shortcut.
-
-`hidusb.dll` (the protocol transport library) is installed next to the executable — the application will not work without it.
+`hidusb.dll` (the protocol transport library) ships next to the executable — keep them together, the application will not work without it. The in-app updater replaces the files in that folder automatically.
 
 ### Build from source
 
@@ -84,7 +80,7 @@ This is third-party software. It communicates with the mouse through the same HI
 - **Нет записи во флеш при запуске** — мышь записывается только по кнопке **«Применить»**, всё остальное хранится локально.
 - **Живая иконка батареи в трее** — значок рисуется в реальном времени: цветная полоска заряда (зелёный / жёлтый / красный) и знак ⚡ при зарядке. Подсказка при наведении: `Impact PRO: [XX]% • Беспроводной/Провод`. Меню трея: Открыть, Профиль 1..4, Выход.
 - **Телеметрия батареи** — история разряда пишется в `battery_stats.json`, из неё считается реальная скорость расхода (%/ч) и оценка вида «~12 ч активной игры». Цифры берутся из наблюдений, а не из таблицы: пока мышь не разряжалась, карточка честно пишет «нужно больше данных».
-- **Обновление внутри приложения** — фоновая проверка через GitHub Releases API. Если тег новее текущей версии, внизу окна появляется плашка **«Скачать и обновить»**: она качает `.msi` из релиза и запускает установщик.
+- **Обновление внутри приложения** — фоновая проверка через GitHub Releases API. Если тег новее текущей версии, внизу окна появляется плашка **«Скачать и обновить»**: она качает портативный `.zip` из релиза, распаковывает, заменяет файлы и перезапускает приложение — без установщика и без прав админа.
 - **Цветовые темы** — пять акцентных палитр (Ardor Red, Sakura Pink, Cyberpunk Cyan, Toxic Green, Deep Violet). Слайдеры, рамка активного DPI, подиум и кнопки перекрашиваются мгновенно.
 - **Образ корпуса мыши** — выбор Чёрный / Белый / Розовый либо **Авто** по MID устройства. Картинка на вкладке «Кнопки» и свечение подиума меняются сразу.
 - **Хот-плаг провод ↔ ресивер** — вставка или извлечение кабеля переключает активное подключение в фоне, без перезапуска. Если доступны оба интерфейса, приоритет у кабеля (зарядка и нет нагрузки на радиоканал); выдернули — приложение уходит на ресивер 2.4G. В статус-баре: «Подключено (провод)» / «Подключено (ресивер)», частоты 2000/4000 Гц доступны только на проводе.
@@ -102,13 +98,9 @@ This is third-party software. It communicates with the mouse through the same HI
 
 ### Установка
 
-Скачайте **ImpactProConfig-v1.1.0-Setup.msi** со страницы [Releases](../../releases) и запустите. Установщик создаёт:
+Скачайте **ImpactProConfig-v1.1.5-Portable.zip** со страницы [Releases](../../releases) и распакуйте в любую папку (на ваш выбор — права админа не нужны, ничего не пишется в `Program Files` и реестр). Запустите `ImpactProConfig.exe`.
 
-- приложение в `Program Files` (или в пользовательской папке),
-- ярлык на рабочем столе,
-- ярлык в меню «Пуск».
-
-`hidusb.dll` (библиотека протокола) устанавливается рядом с exe — без неё приложение работать не будет.
+`hidusb.dll` (библиотека протокола) лежит рядом с exe — не разделяйте их, без неё приложение работать не будет. Встроенное обновление само заменит файлы в этой папке.
 
 ### Сборка из исходников
 
