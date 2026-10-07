@@ -149,7 +149,7 @@
                 <ui:InfoBar Grid.Row="1"
                             Grid.ColumnSpan="3"
                             Margin="0,8,0,0"
-                            Severity="Info"
+                            Severity="Informational"
                             Title="Доступна новая версия"
                             IsClosable="True"
                             Message="{Binding UpdateMessage}">

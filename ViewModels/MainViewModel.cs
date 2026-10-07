@@ -157,9 +157,22 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         int resolved = _mouseSkinIndex;
         if (_mouseSkinIndex == MouseSkin.AutoIndex)
+        {
             resolved = _autoResolvedSkin >= 0
                 ? _autoResolvedSkin
                 : MouseSkin.IndexFromMid(_deviceMid);
+
+            // «Авто» ещё не знает MID (мышь не подключалась в этом запуске).
+            // Раньше сюда уходил 0 и Load просил assets/dev0.png — такого файла
+            // нет, и MainWindow падал на XamlParseException ещё до показа окна.
+            // Падаем на dev3: это единственный реально наблюдавшийся вариант
+            // (CID 16 / MID 6), а не произвольный дефолт.
+            if (resolved <= 0)
+            {
+                App.Log("Skin: MID ещё неизвестен, временно показываем dev3");
+                resolved = 3;
+            }
+        }
 
         MouseImage = MouseSkin.Load(resolved);
         MouseSkinName = MouseSkin.NameOf(resolved);

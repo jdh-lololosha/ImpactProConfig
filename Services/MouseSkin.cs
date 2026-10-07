@@ -33,8 +33,9 @@ internal static class MouseSkin
         "Розовый",
     ];
 
-    /// <summary>Номер файла-образа для каждого пункта списка (dev1..dev3).</summary>
-    private static readonly int[] ImageByIndex = { 0, 1, 2, 3 };
+    /// <summary>Номер файла-образа для каждого пункта списка. У «Авто» (0) своего файла
+    /// нет — он вычисляется по MID, поэтому 0 здесь не используется.</summary>
+    private static readonly int[] ImageByIndex = { 3, 1, 2, 3 };
 
     /// <summary>
     /// Индекс образа по MID: MID 4 → dev1, 5 → dev2, 6 → dev3.
