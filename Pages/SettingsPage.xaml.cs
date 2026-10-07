@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace ImpactProConfig.Pages;
 
@@ -23,5 +24,15 @@ public partial class SettingsPage : Page
     {
         if (Application.Current.MainWindow is MainWindow mw)
             mw.ViewModel.ShowStatusOsd();
+    }
+
+    /// <summary>Клик по пятну палитры: переключает акцентную тему.</summary>
+    private void AccentSwatch_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: int index } &&
+            Application.Current.MainWindow is MainWindow mw)
+        {
+            mw.ViewModel.SelectedAccentIndex = index;
+        }
     }
 }

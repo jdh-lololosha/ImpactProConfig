@@ -128,6 +128,10 @@
                 Background="{DynamicResource ControlFillColorDefaultBrush}"
                 Padding="16,8">
             <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -140,12 +144,40 @@
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
 
-                <Border Grid.Column="1"
+                <!-- Плашка обновления. По умолчанию скрыта: DataTrigger
+                     включает её только когда IsUpdateAvailable = True. -->
+                <ui:InfoBar Grid.Row="1"
+                            Grid.ColumnSpan="3"
+                            Margin="0,8,0,0"
+                            Severity="Info"
+                            Title="Доступна новая версия"
+                            IsClosable="True"
+                            Message="{Binding UpdateMessage}">
+                    <ui:InfoBar.Style>
+                        <Style TargetType="ui:InfoBar">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsUpdateAvailable}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ui:InfoBar.Style>
+                    <!-- Кнопку ставим отдельной строкой: у ui:InfoBar в WPF-UI 3.0.4
+                         нет свойства Action (оно появилось в 4.x). -->
+                    <ui:Button Content="Скачать и обновить"
+                               Click="Update_Click"
+                               Margin="0,8,0,0"
+                               HorizontalAlignment="Right" />
+                </ui:InfoBar>
+
+                <Border Grid.Row="0" Grid.Column="1"
                         CornerRadius="10"
                         Padding="10,3"
                         Margin="0,0,12,0"
                         VerticalAlignment="Center"
-                        Background="#2EE81123">
+                        Background="{Binding AccentBrush}"
+                    Opacity="0.18">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Visibility" Value="Collapsed" />
@@ -157,7 +189,7 @@
                         </Style>
                     </Border.Style>
                     <TextBlock Text="● есть несохранённые изменения"
-                               Foreground="#FF8088"
+                               Foreground="{Binding AccentBrush}"
                                FontSize="11"
                                VerticalAlignment="Center" />
                 </Border>

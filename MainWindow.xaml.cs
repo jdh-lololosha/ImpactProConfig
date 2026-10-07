@@ -15,6 +15,12 @@ public partial class MainWindow : FluentWindow
 {
     private readonly MainViewModel _viewModel = new();
 
+    /// <summary>Значок в трее; живёт вместе с окном, обновляется по таймеру.</summary>
+    private readonly ImpactProConfig.Services.TrayIconService _tray;
+
+    /// <summary>true — пользователь выбрал «Выход», окно можно действительно закрыть.</summary>
+    private bool _exitRequested;
+
     /// <summary>ViewModel окна; страницы подставляют его себе, если NavigationView
     /// создаёт их без контекста (навигация по клику идёт без dataContext).</summary>
     public MainViewModel ViewModel => _viewModel;
@@ -131,6 +137,35 @@ public partial class MainWindow : FluentWindow
         DataContext = _viewModel;
 
         Loaded += OnLoaded;
+        Closing += OnClosing;
+
+        // --- Трей ---
+        // Сворачивание прячет окно в трей, а «закрытие» крестиком тоже сворачивает,
+        // чтобы приложение продолжало писать телеметрию батареи. Выход — только
+        // через «Выход» в меню трея (или Alt+F4 при видимом окне — тоже в трей).
+        _tray = new ImpactProConfig.Services.TrayIconService(
+            RestoreFromTray,
+            index => Dispatcher.Invoke(() => _viewModel.SelectedProfileIndex = index),
+            RequestExit);
+
+        var trayTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        trayTimer.Tick += (_, _) => _tray.Update(
+            _viewModel.BatteryPercent, _viewModel.IsCharging,
+            _viewModel.IsWireless, _viewModel.IsConnected);
+        trayTimer.Start();
+        Closed += (_, _) => trayTimer.Stop();
+
+        StateChanged += (_, _) =>
+        {
+            if (WindowState == WindowState.Minimized)
+            {
+                Hide();
+                ShowInTaskbar = false;
+            }
+        };
+
+        Closed += (_, _) => _tray.Dispose();
+
         Closed += (_, _) =>
         {
             _viewModel.Dispose();
@@ -189,6 +224,35 @@ public partial class MainWindow : FluentWindow
         {
             LogUi($"KB-hook FAILED: {ex.Message}");
         }
+    }
+
+    /// <summary>Развернуть окно из трея (клик по значку или «Открыть» в меню).</summary>
+    private void RestoreFromTray()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            ShowInTaskbar = true;
+            Show();
+            WindowState = WindowState.Normal;
+            Activate();
+        });
+    }
+
+    /// <summary>«Выход» из меню трея — единственный путь, который реально закрывает окно.</summary>
+    private void RequestExit()
+    {
+        _exitRequested = true;
+        Dispatcher.Invoke(Close);
+    }
+
+    /// <summary>Крестик и Alt+F4 прячут окно в трей; выход — только через трей.</summary>
+    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_exitRequested)
+            return;
+        e.Cancel = true;
+        ShowInTaskbar = false;
+        Hide();
     }
 
     private static IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -334,6 +398,14 @@ public partial class MainWindow : FluentWindow
 
         // Безопасное чтение: только в фоне, никаких записей во флеш.
         await _viewModel.InitializeAsync();
+
+        // Проверка обновлений — после чтения устройства, отдельной задачей:
+        // сеть не должна задерживать показ окна, и ошибка сети не должна
+        // выглядеть как поломка конфигуратора.
+        _ = Task.Run(async () =>
+        {
+            await _viewModel.CheckForUpdatesAsync();
+        });
     }
 
     /// <summary>
@@ -409,6 +481,19 @@ public partial class MainWindow : FluentWindow
     {
         // Единственный путь записи в мышь — явное нажатие кнопки.
         await _viewModel.ApplyAsync();
+    }
+
+    /// <summary>«Скачать и обновить» на плашке обновления (сети не блокирует UI).</summary>
+    private async void Update_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await _viewModel.InstallUpdateAsync();
+        }
+        catch (Exception ex)
+        {
+            LogUi($"UpdateClick FAILED: {ex.Message}");
+        }
     }
 
     private void Guide_Click(object sender, RoutedEventArgs e)

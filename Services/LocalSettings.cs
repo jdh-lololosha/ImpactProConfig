@@ -23,6 +23,12 @@ internal sealed class LocalSettings
 
     /// <summary>Битовая маска слотов кнопок (бит = DeviceSlot 0..5), назначенных на «Показать статус мыши (OSD)».</summary>
     public int OsdSlotsMask { get; set; }
+
+    /// <summary>Индекс акцентной темы в ThemeManager.Presets (по умолчанию Ardor Red).</summary>
+    public int AccentIndex { get; set; }
+
+    /// <summary>Индекс выбранного корпуса мыши в MouseSkin.Items (0 = Авто по MID).</summary>
+    public int MouseSkinIndex { get; set; }
 }
 
 /// <summary>

@@ -1,14 +1,28 @@
-# Создаёт GitHub release v1.0.0 через REST API и прикрепляет MSI-файл.
+# Создаёт GitHub release через REST API и прикрепляет MSI-файл.
+# Версия берётся из csproj — того же источника, что и у сборщика MSI.
 param(
-    [string]$MsiPath   = (Join-Path $PSScriptRoot 'ImpactProConfig-v1.0.0-Setup.msi'),
     [string]$Token     = $env:GH_TOKEN,
     [string]$Repo      = 'jdh-lololosha/ImpactProConfig',
-    [string]$Tag       = 'v1.0.0',
-    [string]$Title     = 'v1.0.0 - Official Release',
-    [string]$Notes     = 'First official release with full hardware support, custom UI, OSD and MSI installer.'
+    [string]$Notes     = 'Release notes.'
 )
 
 $ErrorActionPreference = 'Stop'
+
+$csprojPath = Join-Path $PSScriptRoot 'ImpactProConfig.csproj'
+[xml]$csproj = Get-Content -LiteralPath $csprojPath
+# Текст версии берём терпимо к типу узла, индексация не годится (см. build-installer.ps1).
+$versionText = $csproj.Project.PropertyGroup.Version |
+    Where-Object { if ($_ -is [string]) { $_.Trim() } else { $_ -and $_.InnerText.Trim() } } |
+    Select-Object -First 1
+if (-not $versionText) { throw "Version not found in $csprojPath" }
+if ($versionText -is [string]) { $version = $versionText }
+else { $version = $versionText.InnerText }
+$version = $version.Trim() -replace '^v', ''
+
+$Tag       = "v$version"
+$Title     = "$Tag - Official Release"
+$MsiPath   = Join-Path $PSScriptRoot "ImpactProConfig-v$version-Setup.msi"
+Write-Host "RELEASE_TARGET tag=$Tag msi=$MsiPath"
 if (-not $Token) { throw 'No token (GH_TOKEN)' }
 if (-not (Test-Path $MsiPath)) { throw "MSI not found: $MsiPath" }
 

@@ -4,6 +4,10 @@
 
 Unofficial configuration utility for the **ARDOR GAMING Impact PRO** gaming mouse — a dark-themed WPF (.NET 8) replacement for the vendor software, with a live OSD overlay and low-battery notifications.
 
+[![Vibe-coded with AI](https://img.shields.io/badge/%E2%9C%A8_vibe--coded_with_AI-ff69b4?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/jdh-lololosha/ImpactProConfig)
+
+> **✨ Vibe-coded with AI.** This project was written with the help of neural networks (OpenCode), under the attentive human guidance and testing on real hardware.
+
 ---
 
 <a name="english"></a>
@@ -18,7 +22,16 @@ Unofficial configuration utility for the **ARDOR GAMING Impact PRO** gaming mous
 - **Honest multi-monitor support** — monitors are enumerated via Win32 `EnumDisplayMonitors` / `GetMonitorInfo` (resolution and primary flag included), and the OSD is placed strictly inside the **work area (rcWork)** of the selected monitor.
 - **Import / export** — vendor-format config files (10 428 bytes), plus local JSON profiles.
 - **No flash writes at startup** — the mouse is written to only when you press **Apply**; all other changes are local.
+- **Live battery tray icon** — the taskbar icon is drawn in real time: a colour-coded charge bar (green / yellow / red) with a bolt while charging. Hover tooltip reads `Impact PRO: [XX]% • Wireless/Wired`. Right-click menu: Open, Profile 1..4, Exit.
+- **Battery telemetry** — discharge history is recorded to `battery_stats.json`, giving a measured drain rate in %/h and an estimate like `~12 h active gaming`. Both come from actual observations, not a hardcoded table; until the mouse has discharged, the card says more data is needed.
+- **In-app updates** — a background check against the GitHub Releases API. If a newer tag exists, an InfoBar offers **Download and update**, which fetches the `.msi` from the release and starts the installer.
+- **Theme accents** — five accent palettes (Ardor Red, Sakura Pink, Cyberpunk Cyan, Toxic Green, Deep Violet). Sliders, the active-DPI frame, the mouse podium glow and buttons repaint instantly.
+- **Mouse body image** — pick Black / White / Pink, or let **Auto** follow the device's MID. The image on the Buttons tab and the podium glow switch immediately.
 - **Dark-only UI** with the Ardor red accent (#E81123 / #FF2E2E).
+
+### How "Auto (by MID)" actually works
+
+The vendor treats `dev1` / `dev2` / `dev3` as **Config.ini slots, not colours**. `Config.ini` holds `DeviceTotal=3` with `[Device1] MID=4`, `[Device2] MID=5`, `[Device3] MID=6`; `FormHomePage` reads the mouse's MID and picks the matching image. There is no MID→colour table anywhere in the vendor files, so Auto maps `MID 4→dev1, 5→dev2, 6→dev3` and logs an unknown MID rather than silently guessing. This app now reads MID from the device (command 16, `CS_UsbServer_ReadCidMid`) — the previous version declared that command but never called it.
 
 ### Requirements
 
@@ -28,7 +41,7 @@ Unofficial configuration utility for the **ARDOR GAMING Impact PRO** gaming mous
 
 ### Installation
 
-Download **ImpactProConfig-v1.0.0-Setup.msi** from the [Releases](../../releases) page and run it. The installer creates:
+Download **ImpactProConfig-v1.1.0-Setup.msi** from the [Releases](../../releases) page and run it. The installer creates:
 
 - the application in `Program Files` (or per-user location),
 - a desktop shortcut,
@@ -57,6 +70,8 @@ This is third-party software. It communicates with the mouse through the same HI
 <a name="русский"></a>
 ## Русский
 
+> **✨ Навайбкожено при помощи нейросетей (OpenCode)** под чутким человеческим руководством и тестированием на реальном железе.
+
 ### Возможности
 
 - **Полная настройка мыши** — уровни DPI, частота опроса, параметры прокрутки и чувствительности.
@@ -66,7 +81,16 @@ This is third-party software. It communicates with the mouse through the same HI
 - **Честная работа с мониторами** — перечисление через Win32 `EnumDisplayMonitors` / `GetMonitorInfo` (с разрешением и флагом основного), OSD размещается строго в **рабочей области (rcWork)** выбранного монитора.
 - **Импорт / экспорт** — конфиги формата официалки (10 428 байт) и локальные JSON-профили.
 - **Нет записи во флеш при запуске** — мышь записывается только по кнопке **«Применить»**, всё остальное хранится локально.
+- **Живая иконка батареи в трее** — значок рисуется в реальном времени: цветная полоска заряда (зелёный / жёлтый / красный) и знак ⚡ при зарядке. Подсказка при наведении: `Impact PRO: [XX]% • Беспроводной/Провод`. Меню трея: Открыть, Профиль 1..4, Выход.
+- **Телеметрия батареи** — история разряда пишется в `battery_stats.json`, из неё считается реальная скорость расхода (%/ч) и оценка вида «~12 ч активной игры». Цифры берутся из наблюдений, а не из таблицы: пока мышь не разряжалась, карточка честно пишет «нужно больше данных».
+- **Обновление внутри приложения** — фоновая проверка через GitHub Releases API. Если тег новее текущей версии, внизу окна появляется плашка **«Скачать и обновить»**: она качает `.msi` из релиза и запускает установщик.
+- **Цветовые темы** — пять акцентных палитр (Ardor Red, Sakura Pink, Cyberpunk Cyan, Toxic Green, Deep Violet). Слайдеры, рамка активного DPI, подиум и кнопки перекрашиваются мгновенно.
+- **Образ корпуса мыши** — выбор Чёрный / Белый / Розовый либо **Авто** по MID устройства. Картинка на вкладке «Кнопки» и свечение подиума меняются сразу.
 - **Тёмная тема** с акцентом Ardor red (#E81123 / #FF2E2E).
+
+### Как на самом деле работает «Авто (по MID)»
+
+У вендора `dev1` / `dev2` / `dev3` — это **слоты Config.ini, а не цвета**. В `Config.ini` записано `DeviceTotal=3` и секции `[Device1] MID=4`, `[Device2] MID=5`, `[Device3] MID=6`; `FormHomePage` читает MID мыши и берёт картинку по совпадению. Таблицы MID→цвет в файлах вендора нет нигде, поэтому «Авто» сопоставляет `MID 4→dev1, 5→dev2, 6→dev3`, а неизвестный MID пишет в лог, а не молча подменяет картинку. Эта версия научилась читать MID с устройства (команда 16, `CS_UsbServer_ReadCidMid`) — в предыдущей команда была объявлена, но ни разу не вызывалась.
 
 ### Требования
 
@@ -76,7 +100,7 @@ This is third-party software. It communicates with the mouse through the same HI
 
 ### Установка
 
-Скачайте **ImpactProConfig-v1.0.0-Setup.msi** со страницы [Releases](../../releases) и запустите. Установщик создаёт:
+Скачайте **ImpactProConfig-v1.1.0-Setup.msi** со страницы [Releases](../../releases) и запустите. Установщик создаёт:
 
 - приложение в `Program Files` (или в пользовательской папке),
 - ярлык на рабочем столе,

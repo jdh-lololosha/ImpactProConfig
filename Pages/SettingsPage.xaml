@@ -139,6 +139,86 @@
                 </StackPanel>
             </ui:Card>
 
+            <!-- Телеметрия батареи -->
+            <ui:Card Grid.Column="0" Padding="18" Margin="0,14,0,0">
+                <StackPanel>
+                    <TextBlock Text="Статистика батареи"
+                               FontWeight="SemiBold"
+                               FontSize="15"
+                               Margin="0,0,0,4" />
+                    <TextBlock Text="Скорость разряда считается по истории наблюдений (battery_stats.json), а не по одному замеру."
+                               Opacity="0.5"
+                               FontSize="11"
+                               Margin="0,0,0,10"
+                               TextWrapping="Wrap" />
+
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Текущий заряд"
+                                   VerticalAlignment="Center"
+                                   Opacity="0.8" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding BatteryText}"
+                                   FontWeight="SemiBold"
+                                   Margin="14,0,0,0"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Статус зарядки"
+                                   VerticalAlignment="Center"
+                                   Opacity="0.8" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding ConnectionText}"
+                                   FontWeight="SemiBold"
+                                   Margin="14,0,0,0"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Скорость разряда"
+                                   VerticalAlignment="Center"
+                                   Opacity="0.8" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding BatteryDrainText}"
+                                   FontWeight="SemiBold"
+                                   Margin="14,0,0,0"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Осталось примерно"
+                                   VerticalAlignment="Center"
+                                   Opacity="0.8" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding BatteryHoursLeftText}"
+                                   FontWeight="SemiBold"
+                                   Margin="14,0,0,0"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+
+                    <TextBlock Text="{Binding BatteryStatsSamplesText}"
+                               Opacity="0.45"
+                               FontSize="11"
+                               Margin="0,8,0,0" />
+                </StackPanel>
+            </ui:Card>
+
             <!-- OSD-оверлей -->
             <ui:Card Padding="18" Margin="0,14,0,0">
                 <StackPanel>
@@ -206,6 +286,92 @@
                                HorizontalAlignment="Left" />
                 </StackPanel>
             </ui:Card>
+
+                    <!-- Оформление: образ корпуса + акцент интерфейса -->
+                    <ui:Card Grid.Column="0" Padding="18" Margin="0,14,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Оформление"
+                                       FontWeight="SemiBold"
+                                       FontSize="15"
+                                       Margin="0,0,0,4" />
+                            <TextBlock Text="Образ корпуса мыши и акцентный цвет интерфейса. Меняется сразу, без «Применить»."
+                                       Opacity="0.5"
+                                       FontSize="11"
+                                       Margin="0,0,0,10"
+                                       TextWrapping="Wrap" />
+
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Цвет мыши" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding MouseSkinName}"
+                                               Opacity="0.5"
+                                               FontSize="11"
+                                               Margin="0,2,10,0" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1"
+                                          Width="170"
+                                          Margin="12,0,0,0"
+                                          VerticalAlignment="Center"
+                                          ItemsSource="{Binding MouseSkinItems}"
+                                          SelectedIndex="{Binding SelectedMouseSkinIndex, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Тема интерфейса" VerticalAlignment="Center" />
+                                    <TextBlock Text="Перекрашивает слайдеры, рамку активного DPI и подсветку под мышью."
+                                               Opacity="0.5"
+                                               FontSize="11"
+                                               Margin="0,2,10,0"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1"
+                                          Width="170"
+                                          Margin="12,0,0,0"
+                                          VerticalAlignment="Center"
+                                          ItemsSource="{Binding AccentItems}"
+                                          SelectedIndex="{Binding SelectedAccentIndex, Mode=TwoWay}" />
+                            </Grid>
+
+                            <!-- Палитра тем: быстрый выбор кликом по пятну.
+                                 Tag = индекс пресета, обрабатывается кодом (без конвертеров). -->
+                            <ItemsControl ItemsSource="{Binding AccentSwatches}" Margin="0,12,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,10,10">
+                                            <Border Width="46"
+                                                    Height="26"
+                                                    CornerRadius="6"
+                                                    BorderBrush="#40FFFFFF"
+                                                    BorderThickness="1"
+                                                    Background="{Binding Brush}"
+                                                    Tag="{Binding Index}"
+                                                    MouseLeftButtonUp="AccentSwatch_Click"
+                                                    ToolTip="{Binding Name}" />
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontSize="10"
+                                                       Opacity="0.7"
+                                                       HorizontalAlignment="Center"
+                                                       Margin="0,3,0,0" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ui:Card>
                 </StackPanel>
             </Grid>
         </StackPanel>

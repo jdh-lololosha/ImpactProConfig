@@ -11,13 +11,24 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- Трей: System.Windows.Forms.NotifyIcon (в WPF-UI 3.0.4 TaskbarIcon нет —
+         это API из WPF-UI 4.x). -->
+    <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>ImpactProConfig</RootNamespace>
     <AssemblyName>ImpactProConfig</AssemblyName>
     <ApplicationIcon />
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Authors>ImpactProConfig</Authors>
     <Product>ARDOR GAMING Impact PRO Config</Product>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UseWindowsForms подмешивает System.Drawing и System.Windows.Forms в
+         неявные using'и — они конфликтуют с Brush/Color/Point/ComboBox/Application
+         из WPF. Убираем их глобально; трей использует явные using'и. -->
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="WPF-UI" Version="3.0.4" />
@@ -27,8 +38,14 @@
     <None Update="hidusb.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <!-- Изображение мыши встраивается в сборку (pack-URI /Assets/dev3.png). -->
+    <!-- Изображения корпусов мыши встраиваются в сборку
+         (pack-URI /Assets/dev1.png | /Assets/dev2.png | /Assets/dev3.png).
+         Источник ассетов: res\2Button\ установленного "Mouse Drive Beta.exe". -->
+    <None Remove="Assets\dev1.png" />
+    <None Remove="Assets\dev2.png" />
     <None Remove="Assets\dev3.png" />
+    <Resource Include="Assets\dev1.png" />
+    <Resource Include="Assets\dev2.png" />
     <Resource Include="Assets\dev3.png" />
   </ItemGroup>
 

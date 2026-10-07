@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using ImpactProConfig.Driver;
 using ImpactProConfig.Services;
 using Microsoft.Win32;
@@ -19,9 +20,16 @@ namespace ImpactProConfig.ViewModels;
 /// Все USB-вызовы — в фоне (Task.Run), UI не блокируется. Запись во флеш
 /// выполняется ТОЛЬКО в ApplyAsync (см. DeviceSession.WriteFlashAsync).
 /// </summary>
+/// <summary>Пятно акцентного цвета в палитре на странице настроек.</summary>
+/// <param name="Index">Индекс пресета — его кладём в Tag и шлём в обработчик клика.</param>
+public sealed record AccentSwatch(int Index, string Name, Brush Brush);
+
 public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly DeviceSession _session;
+
+    /// <summary>История разряда в battery_stats.json.</summary>
+    private readonly BatteryStatsService _batteryStats = new();
 
     private FlashDataMap _baseline;
     private FlashDataMap _working;
@@ -69,6 +77,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private int _osdSlotsMask;
     private string _ledStatusText = "—";
     private Brush _batteryBrush = Brushes.Gray;
+    private int _accentIndex;
+    private Brush _accentBrush = Brushes.IndianRed;
+    private Brush _accentGlowBrush = Brushes.Transparent;
+    private int _mouseSkinIndex;
+    private ImageSource _mouseImage = null!;
+    private string _mouseSkinName = MouseSkin.Items[0];
 
     private readonly DpiSlotViewModel[] _dpiSlots = new DpiSlotViewModel[8];
     private readonly ButtonSlotViewModel[] _buttonSlots = new ButtonSlotViewModel[6];
@@ -98,6 +112,120 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string[] SensorModeItems => SensorModeOptions;
     public string[] LodItems => LodOptions;
     public string[] SleepItems => SleepOptions;
+
+    // ===== Образ корпуса мыши =====
+
+    public string[] MouseSkinItems => MouseSkin.Items;
+
+    /// <summary>Выбранный образ корпуса; 0 = «Авто (по MID)».</summary>
+    public int SelectedMouseSkinIndex
+    {
+        get => _mouseSkinIndex;
+        set
+        {
+            if (!Set(ref _mouseSkinIndex, Math.Clamp(value, 0, MouseSkin.Items.Length - 1)))
+                return;
+            _local.MouseSkinIndex = _mouseSkinIndex;
+            SaveLocal();
+            ResolveSkin();
+        }
+    }
+
+    /// <summary>Картинка корпуса для вкладки «Кнопки».</summary>
+    public ImageSource MouseImage
+    {
+        get => _mouseImage;
+        private set
+        {
+            if (Set(ref _mouseImage, value))
+                OnPropertyChanged(nameof(MouseImageSize));
+        }
+    }
+
+    /// <summary>Размер полотна образа — на нём заморожены координаты маркеров.</summary>
+    public string MouseImageSize =>
+        _mouseImage is not null ? $"{_mouseImage.Width:0}×{_mouseImage.Height:0}" : "—";
+
+    /// <summary>Отображаемый вариант корпуса (может отличаться от выбранного при «Авто»).</summary>
+    public string MouseSkinName
+    {
+        get => _mouseSkinName;
+        private set => Set(ref _mouseSkinName, value);
+    }
+
+    private void ResolveSkin()
+    {
+        int resolved = _mouseSkinIndex;
+        if (_mouseSkinIndex == MouseSkin.AutoIndex)
+            resolved = _autoResolvedSkin >= 0
+                ? _autoResolvedSkin
+                : MouseSkin.IndexFromMid(_deviceMid);
+
+        MouseImage = MouseSkin.Load(resolved);
+        MouseSkinName = MouseSkin.NameOf(resolved);
+        OnPropertyChanged(nameof(SelectedMouseSkinIndex));
+    }
+
+    /// <summary>MID мыши (0 — неизвестен); приходит из DeviceSession, команда 16.</summary>
+    private byte _deviceMid;
+    private int _autoResolvedSkin = -1;
+
+    // ===== Акцентная тема интерфейса =====
+
+    public string[] AccentItems => ThemeManager.Presets.Select(p => p.Name).ToArray();
+
+    /// <summary>Палитра для быстрого выбора темы: цвет-пятно + индекс пресета.</summary>
+    public AccentSwatch[] AccentSwatches => _accentSwatches;
+
+    private readonly AccentSwatch[] _accentSwatches =
+        ThemeManager.Presets
+            .Select((p, i) => new AccentSwatch(i, p.Name, new SolidColorBrush(p.Color)))
+            .ToArray();
+
+    /// <summary>Выбранный акцент; перекрашивает UI на лету.</summary>
+    public int SelectedAccentIndex
+    {
+        get => _accentIndex;
+        set
+        {
+            int clamped = Math.Clamp(value, 0, ThemeManager.Presets.Length - 1);
+            if (!Set(ref _accentIndex, clamped))
+                return;
+            ApplyAccent();
+            _local.AccentIndex = clamped;
+            SaveLocal();
+        }
+    }
+
+    /// <summary>Акцентный цвет (плашки, бейдж несохранённых изменений).</summary>
+    public Brush AccentBrush
+    {
+        get => _accentBrush;
+        private set => Set(ref _accentBrush, value);
+    }
+
+    /// <summary>Радиальное свечение подиума под мышью — перекрашивается вместе с темой.</summary>
+    public Brush AccentGlowBrush
+    {
+        get => _accentGlowBrush;
+        private set => Set(ref _accentGlowBrush, value);
+    }
+
+    private void ApplyAccent()
+    {
+        var preset = ThemeManager.At(_accentIndex);
+        try
+        {
+            ThemeManager.Apply(_accentIndex);
+        }
+        catch (Exception ex)
+        {
+            App.Log($"AccentApply: {ex.Message}");
+        }
+
+        AccentBrush = new SolidColorBrush(preset.Color);
+        AccentGlowBrush = ThemeManager.PodiumGlow(preset.Color);
+    }
 
     public MainViewModel()
     {
@@ -144,6 +272,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _session.CurrentDpiChanged += OnCurrentDpiChanged;
         _session.DpiLedUpdated += OnDpiLedUpdated;
         _session.ProfileChanged += OnProfileChanged;
+        _session.DeviceInfoUpdated += OnDeviceInfoUpdated;
 
         // Состояние автозагрузки читаем из реестра сразу (локальная настройка ПК).
         try
@@ -166,6 +295,37 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _osdDurationIndex = Math.Clamp(_local.OsdDurationIndex, 0, OsdDurationOptions.Length - 1);
         OsdMonitorItems = BuildOsdMonitorItems();
         _osdMonitorIndex = Math.Clamp(_local.OsdMonitorIndex, 0, OsdMonitorItems.Length - 1);
+
+        // Акцент применяется последним: к этому моменту _local уже прочитан.
+        _accentIndex = Math.Clamp(_local.AccentIndex, 0, ThemeManager.Presets.Length - 1);
+        ApplyAccent();
+
+        // Образ корпуса: сначала значение из настроек, «Авто» уточнится по MID.
+        _mouseSkinIndex = Math.Clamp(_local.MouseSkinIndex, 0, MouseSkin.Items.Length - 1);
+        ResolveSkin();
+    }
+
+    /// <summary>
+    /// CID/MID от мыши (команда 16). По вендорской логике MID выбирает образ
+    /// корпуса: 4 → dev1, 5 → dev2, 6 → dev3. Неизвестный MID не молча
+    /// подменяем дефолтом — пишем в лог и оставляем текущий выбор.
+    /// </summary>
+    private void OnDeviceInfoUpdated(DeviceInfo info)
+    {
+        _deviceMid = info.MID;
+
+        int fromMid = MouseSkin.IndexFromMid(info.MID);
+        if (fromMid < 0)
+        {
+            App.Log($"Skin: неизвестный MID={info.MID} (ожидаются 4/5/6) — авто-выбор не сработал");
+        }
+        else
+        {
+            _autoResolvedSkin = fromMid;
+        }
+
+        if (_mouseSkinIndex == MouseSkin.AutoIndex)
+            ResolveSkin();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -238,6 +398,98 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string BatteryText => _batteryPercent < 0
         ? "—"
         : $"{_batteryPercent}%" + (_isCharging ? " ⚡" : "");
+
+    /// <summary>Тип подключения: true — приёмник 2.4G, false — кабель Type-C.</summary>
+    public bool IsWireless => _session.ConnectedPid == DeviceSession.Pids[0];
+
+    public string ConnectionText => _session.ConnectedPid == null
+        ? "Нет подключения"
+        : IsWireless ? "Беспроводной" : "Провод";
+
+    // ===== Телеметрия батареи =====
+
+    /// <summary>Скорость разряда, напр. «6.4 %/ч».</summary>
+    public string BatteryDrainText => _batteryStats.DrainText;
+
+    /// <summary>Примерное время работы до нуля, напр. «~12 ч активной игры».</summary>
+    public string BatteryHoursLeftText =>
+        _batteryStats.HoursLeftText(_batteryPercent);
+
+    /// <summary>Сколько точек уже накоплено — видно, что статистика не пустая.</summary>
+    public string BatteryStatsSamplesText => $"{_batteryStats.SampleCount} замеров";
+
+    /// <summary>Хватает ли истории для честной оценки.</summary>
+    public bool HasBatteryStats => _batteryStats.HasEnoughData;
+
+    // ===== Проверка обновлений =====
+
+    /// <summary>Показать ли плашку обновления (есть релиз новее текущей версии).</summary>
+    public bool IsUpdateAvailable
+    {
+        get => _isUpdateAvailable;
+        private set => Set(ref _isUpdateAvailable, value);
+    }
+
+    /// <summary>Текст плашки, напр. «v1.2.0 (у вас 1.1.0)».</summary>
+    public string UpdateMessage
+    {
+        get => _updateMessage;
+        private set => Set(ref _updateMessage, value);
+    }
+
+    /// <summary>Ссылка на .msi из релиза (null — установщик приложен не был).</summary>
+    public string? UpdateDownloadUrl { get; private set; }
+
+    private bool _isUpdateAvailable;
+    private string _updateMessage = string.Empty;
+
+    /// <summary>
+    /// Фоновая проверка GitHub Releases. Вызывается один раз при старте и в
+    /// фоне: сеть не должна блокировать окно. Ошибка сети молча игнорируется.
+    /// </summary>
+    public async Task CheckForUpdatesAsync()
+    {
+        var info = await new UpdateService().CheckAsync();
+        if (info is not { Available: true })
+            return;
+
+        // Релиз без .msi показать можно, но кнопка «Скачать» поведёт в никуда —
+        // в этом случае молча выходим, лучше без плашки.
+        if (string.IsNullOrEmpty(info.Url))
+        {
+            App.Log($"UpdateCheck: найден {info.Tag}, но .msi в релизе нет");
+            return;
+        }
+
+        UpdateDownloadUrl = info.Url;
+        UpdateMessage = $"{info.Tag} (у вас {UpdateService.CurrentVersion.ToString(3)})";
+        IsUpdateAvailable = true;
+    }
+
+    /// <summary>Скачать .msi и запустить установку (фон, потом показываем прогресс).</summary>
+    public async Task InstallUpdateAsync()
+    {
+        string? url = UpdateDownloadUrl;
+        if (string.IsNullOrEmpty(url))
+            return;
+
+        IsBusy = true;
+        StatusText = "Загрузка обновления…";
+        try
+        {
+            await UpdateService.DownloadAndInstallAsync(url);
+            StatusText = "Запущен установщик. Закройте приложение для завершения.";
+        }
+        catch (Exception ex)
+        {
+            App.Log($"UpdateInstall: {ex.Message}");
+            StatusText = $"Не удалось скачать обновление: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 
     public string MouseVersionText
     {
@@ -781,7 +1033,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             : bat.level > 20 ? OrangeBrush
             : RedBrush;
         OnPropertyChanged(nameof(BatteryText));
+
+        _batteryStats.Record(bat.level, bat.isCharging != 0);
+        RaiseBatteryStats();
+
         CheckLowBatteryAlert();
+    }
+
+    /// <summary>Обновить карточку статистики батареи.</summary>
+    private void RaiseBatteryStats()
+    {
+        OnPropertyChanged(nameof(BatteryDrainText));
+        OnPropertyChanged(nameof(BatteryHoursLeftText));
+        OnPropertyChanged(nameof(BatteryStatsSamplesText));
+        OnPropertyChanged(nameof(HasBatteryStats));
     }
 
     private static readonly Brush GreenBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xC7, 0x11));

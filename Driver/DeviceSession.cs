@@ -16,7 +16,7 @@ public sealed class FlashReadResult
     public required FlashDataMap Map { get; init; }
     public BatteryStatus Battery { get; set; }
     public int Version { get; set; }
-    public DeviceInfo DeviceInfo { get; set; }
+    public DeviceInfo Device { get; set; }
 }
 
 /// <summary>Результат «Применить»: запись + побайтовая проверка перечитанным флешем.</summary>
@@ -59,6 +59,7 @@ public sealed class DeviceSession : IDisposable
     private TaskCompletionSource<FlashReadResult>? _flashTcs;
     private TaskCompletionSource<BatteryStatus>? _batteryTcs;
     private TaskCompletionSource<int>? _versionTcs;
+    private TaskCompletionSource<DeviceInfo>? _cidMidTcs;
     private bool _started;
     private bool _disposed;
 
@@ -78,6 +79,7 @@ public sealed class DeviceSession : IDisposable
     public event Action<LedBar>? LedBarUpdated;
     public event Action<DeviceStatusChanged>? StatusChanged;
     public event Action<byte>? ProfileChanged;        // id=14, индекс профиля 0..3
+    public event Action<DeviceInfo>? DeviceInfoUpdated;   // id=16, CID/MID/DeviceType
 
     public DeviceSession()
     {
@@ -174,6 +176,8 @@ public sealed class DeviceSession : IDisposable
                 TaskCreationOptions.RunContinuationsAsynchronously);
             _versionTcs = new TaskCompletionSource<int>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
+            _cidMidTcs = new TaskCompletionSource<DeviceInfo>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
 
             HidUsbNative.Start(endpoint, _dataReceived);
             _started = true;
@@ -186,12 +190,14 @@ public sealed class DeviceSession : IDisposable
             HidUsbNative.CS_UsbServer_ReadBatteryLevel();
             HidUsbNative.CS_UsbServer_ReadVersion();
             HidUsbNative.CS_UsbServer_ReadConfig();     // индекс активного профиля
+            HidUsbNative.CS_UsbServer_ReadCidMid();     // CID/MID — выбор образа корпуса
 
             using var reg = ct.Register(() =>
             {
                 _flashTcs.TrySetCanceled(ct);
                 _batteryTcs.TrySetCanceled(ct);
                 _versionTcs.TrySetCanceled(ct);
+                _cidMidTcs.TrySetCanceled(ct);
             });
 
             try
@@ -209,6 +215,16 @@ public sealed class DeviceSession : IDisposable
                     result.Battery = batTask.Result;
                 if (_versionTcs!.Task is { IsCompletedSuccessfully: true } verTask)
                     result.Version = verTask.Result;
+                if (_cidMidTcs!.Task is { IsCompletedSuccessfully: true } cidTask)
+                {
+                    result.Device = cidTask.Result;
+                    Log($"READ cidmid: CID={result.Device.CID} MID={result.Device.MID} type={result.Device.DeviceType}");
+                    DeviceInfoUpdated?.Invoke(result.Device);
+                }
+                else
+                {
+                    Log("READ cidmid: ответа нет — образ корпуса останется ручным");
+                }
 
                 FlashData = result.Map;
                 SetState(ConnectionState.ConnectedReadOnly);
@@ -423,6 +439,13 @@ public sealed class DeviceSession : IDisposable
                 Log($"READ battery: level={bat.level} charging={bat.isCharging} voltage={bat.BatVoltage}");
                 _batteryTcs?.TrySetResult(bat);
                 BatteryUpdated?.Invoke(bat);
+                break;
+
+            case UsbCommandID.ReadCIDMID:
+                var info = HidUsbNative.ParseCidMid(data);
+                Log($"READ cidmid: CID={info.CID} MID={info.MID} type={info.DeviceType}");
+                _cidMidTcs?.TrySetResult(info);
+                DeviceInfoUpdated?.Invoke(info);
                 break;
 
             case UsbCommandID.ReadVersionID:

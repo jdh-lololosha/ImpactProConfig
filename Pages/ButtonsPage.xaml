@@ -120,16 +120,14 @@
                                  HorizontalAlignment="Center"
                                  VerticalAlignment="Bottom"
                                  Margin="0,0,0,4">
+                            <!-- Подиум перекрашивается под выбранную тему. -->
                             <Ellipse.Fill>
-                                <RadialGradientBrush GradientOrigin="0.5,0.5">
-                                    <GradientStop Color="#8CE81123" Offset="0" />
-                                    <GradientStop Color="#28E81123" Offset="0.55" />
-                                    <GradientStop Color="#00E81123" Offset="1" />
-                                </RadialGradientBrush>
+                                <Binding Path="AccentGlowBrush" />
                             </Ellipse.Fill>
                         </Ellipse>
 
-                        <Image Source="/Assets/dev3.png"
+                        <!-- Образ корпуса выбирается в Настройках; здесь он просто отображается. -->
+                        <Image Source="{Binding MouseImage}"
                                Stretch="Fill"
                                RenderOptions.BitmapScalingMode="HighQuality" />
 

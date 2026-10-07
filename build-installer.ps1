@@ -1,11 +1,32 @@
 # Генерирует .wxs для WiX v4/v5 из содержимого publish-папки и собирает MSI.
 # Покрывает подпапки (если появятся), ярлыки на рабочем столе и в меню Пуск.
 param(
-    [string]$PublishDir = (Join-Path $PSScriptRoot 'publish'),
-    [string]$OutMsi      = (Join-Path $PSScriptRoot 'ImpactProConfig-v1.0.0-Setup.msi')
+    [string]$PublishDir = (Join-Path $PSScriptRoot 'publish')
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Версию берём из csproj — единственный источник. Раньше она была вписана
+# здесь и в .wxs вручную, из-за чего MSI собирался со старой версией,
+# и автообновление не срабатывало (новый msi не видел старый продукт).
+$csprojPath = Join-Path $PSScriptRoot 'ImpactProConfig.csproj'
+[xml]$csproj = Get-Content -LiteralPath $csprojPath
+# ВАЖНО: .InnerText, а не индексация. ("1.1.0")[0] даёт System.Char '1',
+# и из этого получался MSI вида "v1-Setup" — версия молча теряла всё после точки.
+# Элементы бывают и XmlElement, и строкой (PowerShell снимает тип с простых
+# узлов), поэтому берём текст терпимо, без обращения к .InnerText в фильтре.
+$versionText = $csproj.Project.PropertyGroup.Version |
+    Where-Object { if ($_ -is [string]) { $_.Trim() } else { $_ -and $_.InnerText.Trim() } } |
+    Select-Object -First 1
+if (-not $versionText) { throw "Version not found in $csprojPath" }
+
+if ($versionText -is [string]) { $productVersion = $versionText }
+else { $productVersion = $versionText.InnerText }
+$productVersion = $productVersion.Trim() -replace '^v', ''
+if ($productVersion -notmatch '^\d+\.\d+\.\d+$') {
+    throw "Version '$productVersion' is not strict SemVer (expected X.Y.Z)"
+}
+$OutMsi = Join-Path $PSScriptRoot "ImpactProConfig-v$productVersion-Setup.msi"
 
 $exe = Join-Path $PublishDir 'ImpactProConfig.exe'
 if (-not (Test-Path $exe)) { throw "Publish dir not found or no ImpactProConfig.exe: $PublishDir" }
@@ -103,6 +124,8 @@ $shortcuts = @"
 
 $featureRefs = ($script:refs | ForEach-Object { "      <ComponentRef Id=`"$_`" />" }) -join "`n"
 
+# UpgradeCode НЕ зависит от версии: он должен оставаться прежним, иначе
+# установщик перестанет видеть уже установленный продукт как свою апгрейд-версию.
 $upgradeGuid = New-DeterministicGuid 'ImpactProConfig-upgrade-v1'
 
 # ---- Итоговый .wxs ----
@@ -110,7 +133,7 @@ $wxs = @"
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="ARDOR GAMING Impact PRO Config"
-           Version="1.0.0"
+           Version="$productVersion"
            Manufacturer="ARDOR GAMING"
            UpgradeCode="$upgradeGuid"
            Scope="perMachine">
