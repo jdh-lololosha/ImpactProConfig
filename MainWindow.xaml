@@ -9,6 +9,7 @@
         xmlns:pages="clr-namespace:ImpactProConfig.Pages"
         mc:Ignorable="d"
         Title="ARDOR GAMING Impact PRO"
+        Icon="pack://application:,,,/Assets/app.ico"
         Width="1080"
         Height="720"
         MinWidth="960"
