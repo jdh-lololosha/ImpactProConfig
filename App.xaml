@@ -79,7 +79,7 @@
 
             <!-- ===================== Slider ===================== -->
             <Style TargetType="{x:Type Slider}">
-                <Setter Property="Foreground" Value="{StaticResource ImpactAccentBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource ImpactAccentBrush}" />
                 <Setter Property="Background" Value="#3A3A3A" />
                 <Setter Property="IsMoveToPointEnabled" Value="True" />
                 <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -103,7 +103,7 @@
                                                     <Border Height="4"
                                                             VerticalAlignment="Center"
                                                             CornerRadius="2"
-                                                            Background="{StaticResource ImpactAccentBrush}" />
+                                                            Background="{DynamicResource ImpactAccentBrush}" />
                                                 </ControlTemplate>
                                             </RepeatButton.Template>
                                         </RepeatButton>
@@ -173,7 +173,7 @@
                                              Height="8"
                                              HorizontalAlignment="Center"
                                              VerticalAlignment="Center"
-                                             Fill="{StaticResource ImpactAccentBrush}"
+                                             Fill="{DynamicResource ImpactAccentBrush}"
                                              Visibility="Collapsed" />
                                 </Grid>
                                 <ContentPresenter Margin="8,0,0,0"
@@ -182,7 +182,7 @@
                             </StackPanel>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="OuterRing" Property="Stroke" Value="{StaticResource ImpactAccentBrush}" />
+                                    <Setter TargetName="OuterRing" Property="Stroke" Value="{DynamicResource ImpactAccentBrush}" />
                                     <Setter TargetName="CheckDot" Property="Visibility" Value="Visible" />
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
@@ -218,8 +218,8 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="SegmentBg" Property="Background" Value="{StaticResource ImpactAccentBrush}" />
-                                    <Setter TargetName="SegmentBg" Property="BorderBrush" Value="{StaticResource ImpactAccentBrush}" />
+                                    <Setter TargetName="SegmentBg" Property="Background" Value="{DynamicResource ImpactAccentBrush}" />
+                                    <Setter TargetName="SegmentBg" Property="BorderBrush" Value="{DynamicResource ImpactAccentBrush}" />
                                     <Setter Property="Foreground" Value="White" />
                                     <Setter Property="FontWeight" Value="SemiBold" />
                                 </Trigger>
@@ -359,7 +359,7 @@
                                     <Setter TargetName="Chrome" Property="BorderBrush" Value="#5AFFFFFF" />
                                     <Setter TargetName="Chrome" Property="Effect">
                                         <Setter.Value>
-                                            <DropShadowEffect Color="#E81123"
+                                            <DropShadowEffect Color="{DynamicResource ImpactAccentColor}"
                                                               BlurRadius="10"
                                                               ShadowDepth="0"
                                                               Opacity="0.55" />
@@ -371,7 +371,7 @@
                                 <!-- Открыт: рамка на акцент, шеврон развёрнут вверх -->
                                 <Trigger Property="IsDropDownOpen" Value="True">
                                     <Setter TargetName="Chrome" Property="Background" Value="#2AFFFFFF" />
-                                    <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource ImpactAccentBrush}" />
+                                    <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource ImpactAccentBrush}" />
                                     <Setter TargetName="Chevron" Property="RenderTransform">
                                         <Setter.Value>
                                             <RotateTransform Angle="180" />
@@ -414,7 +414,7 @@
                                            VerticalAlignment="Stretch"
                                            RadiusX="1.5"
                                            RadiusY="1.5"
-                                           Fill="{StaticResource ImpactAccentBrush}"
+                                           Fill="{DynamicResource ImpactAccentBrush}"
                                            Opacity="0"
                                            Visibility="Collapsed" />
                             </Grid>
@@ -488,8 +488,8 @@
                             </StackPanel>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="BoxBorder" Property="Background" Value="{StaticResource ImpactAccentBrush}" />
-                                    <Setter TargetName="BoxBorder" Property="BorderBrush" Value="{StaticResource ImpactAccentBrush}" />
+                                    <Setter TargetName="BoxBorder" Property="Background" Value="{DynamicResource ImpactAccentBrush}" />
+                                    <Setter TargetName="BoxBorder" Property="BorderBrush" Value="{DynamicResource ImpactAccentBrush}" />
                                     <Setter TargetName="CheckGlyph" Property="Visibility" Value="Visible" />
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">

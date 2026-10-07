@@ -19,11 +19,11 @@
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsSelected}" Value="True">
                     <Setter Property="Background" Value="#1A000000" />
-                    <Setter Property="BorderBrush" Value="{StaticResource ImpactAccentBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource ImpactAccentBrush}" />
                     <Setter Property="BorderThickness" Value="2" />
                     <Setter Property="Effect">
                         <Setter.Value>
-                            <DropShadowEffect Color="#E81123"
+                            <DropShadowEffect Color="{DynamicResource ImpactAccentColor}"
                                               BlurRadius="22"
                                               ShadowDepth="0"
                                               Opacity="0.95" />
@@ -31,10 +31,10 @@
                     </Setter>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsActiveByDevice}" Value="True">
-                    <Setter Property="BorderBrush" Value="{StaticResource ImpactAccentBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource ImpactAccentBrush}" />
                     <Setter Property="Effect">
                         <Setter.Value>
-                            <DropShadowEffect Color="#E81123"
+                            <DropShadowEffect Color="{DynamicResource ImpactAccentColor}"
                                               BlurRadius="22"
                                               ShadowDepth="0"
                                               Opacity="0.8" />
@@ -131,7 +131,7 @@
                                             <Border HorizontalAlignment="Right"
                                                     CornerRadius="8"
                                                     Padding="7,2"
-                                                    Background="{StaticResource ImpactAccentBrush}">
+                                                    Background="{DynamicResource ImpactAccentBrush}">
                                                 <Border.Style>
                                                     <Style TargetType="Border">
                                                         <Setter Property="Visibility" Value="Collapsed" />

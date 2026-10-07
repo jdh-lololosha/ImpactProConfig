@@ -29,9 +29,30 @@ internal static class ThemeManager
     public static AccentPreset At(int index) =>
         Presets[Math.Clamp(index, 0, Presets.Length - 1)];
 
-    /// <summary>Применить акцент к темам WPF-UI. Бросает исключение при отказе темы.</summary>
-    public static void Apply(int index) =>
-        ApplicationAccentColorManager.Apply(At(index).Color, ApplicationTheme.Dark, false);
+    /// <summary>
+    /// Применить акцент к темам WPF-UI и перекрасить все элементы НА ЛЕТУ.
+    ///
+    /// Два независимых механизма, оба обязательны:
+    ///  1. ApplicationAccentColorManager — перекрашивает контролы WPF-UI
+    ///     (слайдеры, кнопки, тумблеры), которые читают свой акцент из темы.
+    ///  2. Application.Current.Resources — обновляет ImpactAccentBrush /
+    ///     ImpactAccentColor, на которые элементы привязаны через DynamicResource.
+    ///     Без этого StaticResource-подобные места (DropShadowEffect, рамки)
+    ///     останутся старого цвета до перезапуска.
+    /// </summary>
+    public static void Apply(int index)
+    {
+        Color color = At(index).Color;
+        ApplicationAccentColorManager.Apply(color, ApplicationTheme.Dark, false);
+
+        // Обновляем ресурсы на лету: DynamicResource подхватит новое значение
+        // без перезапуска и без пересоздания элементов.
+        if (Application.Current != null)
+        {
+            Application.Current.Resources["ImpactAccentColor"] = color;
+            Application.Current.Resources["ImpactAccentBrush"] = new SolidColorBrush(color);
+        }
+    }
 
     /// <summary>Цвет заливки неонового подиума под корпус мыши.</summary>
     public static RadialGradientBrush PodiumGlow(Color accent) => new()
