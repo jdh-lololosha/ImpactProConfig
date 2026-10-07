@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ImpactProConfig.ViewModels;
@@ -17,6 +18,14 @@ public partial class MainWindow : FluentWindow
 
     /// <summary>Значок в трее; живёт вместе с окном, обновляется по таймеру.</summary>
     private readonly ImpactProConfig.Services.TrayIconService _tray;
+
+    /// <summary>Хук оконных сообщений для перехвата WM_DEVICECHANGE.</summary>
+    private HwndSource? _hwndSource;
+
+    // Константы WM_DEVICECHANGE.
+    private const int WM_DEVICECHANGE = 0x0219;
+    private const int DBT_DEVICEARRIVAL = 0x8000;
+    private const int DBT_DEVICEREMOVECOMPLETE = 0x8004;
 
     /// <summary>true — пользователь выбрал «Выход», окно можно действительно закрыть.</summary>
     private bool _exitRequested;
@@ -139,6 +148,16 @@ public partial class MainWindow : FluentWindow
         Loaded += OnLoaded;
         Closing += OnClosing;
 
+        // --- Hot-Plug: перехват WM_DEVICECHANGE ---
+        // При вставке/извлечении USB (DBT_DEVICEARRIVAL / DBT_DEVICEREMOVECOMPLETE)
+        // запускаем быстрый перескан устройств. Это даёт бесшовное переключение
+        // кабель <-> ресивер без перезапуска приложения.
+        SourceInitialized += (_, _) =>
+        {
+            _hwndSource = new HwndSource(0, 0, 0, 0, 0, "ImpactProConfig", IntPtr.Zero);
+            _hwndSource.AddHook(WndProc);
+        };
+
         // --- Трей ---
         // Сворачивание прячет окно в трей, а «закрытие» крестиком тоже сворачивает,
         // чтобы приложение продолжало писать телеметрию батареи. Выход — только
@@ -224,6 +243,25 @@ public partial class MainWindow : FluentWindow
         {
             LogUi($"KB-hook FAILED: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Обработчик оконных сообщений. Ловит WM_DEVICECHANGE для хот-плага.
+    /// </summary>
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg != WM_DEVICECHANGE)
+            return IntPtr.Zero;
+
+        int reason = wParam.ToInt32();
+        if (reason != DBT_DEVICEARRIVAL && reason != DBT_DEVICEREMOVECOMPLETE)
+            return IntPtr.Zero;
+
+        // Не дёргаем UI напрямую: перескан идёт в фоне, состояние сессии
+        // само обновит статус через StateChanged.
+        LogUi($"WM_DEVICECHANGE reason=0x{reason:X4} -> RescanAsync");
+        _ = _viewModel.RescanAsync();
+        return IntPtr.Zero;
     }
 
     /// <summary>Развернуть окно из трея (клик по значку или «Открыть» в меню).</summary>

@@ -27,6 +27,7 @@ Unofficial configuration utility for the **ARDOR GAMING Impact PRO** gaming mous
 - **In-app updates** — a background check against the GitHub Releases API. If a newer tag exists, an InfoBar offers **Download and update**, which fetches the `.msi` from the release and starts the installer.
 - **Theme accents** — five accent palettes (Ardor Red, Sakura Pink, Cyberpunk Cyan, Toxic Green, Deep Violet). Sliders, the active-DPI frame, the mouse podium glow and buttons repaint instantly.
 - **Mouse body image** — pick Black / White / Pink, or let **Auto** follow the device's MID. The image on the Buttons tab and the podium glow switch immediately.
+- **Hot-plug cable ↔ receiver** — plugging or unplugging the USB cable switches the active connection in the background without restarting. When both interfaces are present the cable wins (charging + no radio overhead); pulling it falls back to the 2.4G receiver. The status bar reads `Подключено (провод)` / `Подключено (ресивер)`, and 2000/4000 Hz report rates are only offered on cable.
 - **Dark-only UI** with the Ardor red accent (#E81123 / #FF2E2E).
 
 ### How "Auto (by MID)" actually works
@@ -86,6 +87,7 @@ This is third-party software. It communicates with the mouse through the same HI
 - **Обновление внутри приложения** — фоновая проверка через GitHub Releases API. Если тег новее текущей версии, внизу окна появляется плашка **«Скачать и обновить»**: она качает `.msi` из релиза и запускает установщик.
 - **Цветовые темы** — пять акцентных палитр (Ardor Red, Sakura Pink, Cyberpunk Cyan, Toxic Green, Deep Violet). Слайдеры, рамка активного DPI, подиум и кнопки перекрашиваются мгновенно.
 - **Образ корпуса мыши** — выбор Чёрный / Белый / Розовый либо **Авто** по MID устройства. Картинка на вкладке «Кнопки» и свечение подиума меняются сразу.
+- **Хот-плаг провод ↔ ресивер** — вставка или извлечение кабеля переключает активное подключение в фоне, без перезапуска. Если доступны оба интерфейса, приоритет у кабеля (зарядка и нет нагрузки на радиоканал); выдернули — приложение уходит на ресивер 2.4G. В статус-баре: «Подключено (провод)» / «Подключено (ресивер)», частоты 2000/4000 Гц доступны только на проводе.
 - **Тёмная тема** с акцентом Ardor red (#E81123 / #FF2E2E).
 
 ### Как на самом деле работает «Авто (по MID)»

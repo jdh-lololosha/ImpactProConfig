@@ -8,6 +8,8 @@ public enum ConnectionState
     Disconnected,
     Connecting,
     ConnectedReadOnly,
+    /// <summary>Связь оборвалась (кабель выдернут), идёт поиск активного эндпоинта.</summary>
+    Reconnecting,
     Error
 }
 
@@ -44,7 +46,15 @@ public sealed class DeviceSession : IDisposable
     // VID и PID из Config.ini официалки + спецификации устройства.
     // VID = 3554, кабель = F59A, ресивер = F53C.
     public const string Vid = "3554";
-    public static readonly string[] Pids = { "F53C", "F59A" }; // ресивер, кабель
+    public const string ReceiverPid = "F53C";
+    public const string CablePid = "F59A";
+
+    /// <summary>
+    /// Порядок поиска устройства. ПРИОРИТЕТ У КАБЕЛЯ: на проводе мышь заряжается
+    /// и радиоканал не тратится на передачу, поэтому при одновременном
+    /// наличии обоих эндпоинтов выбираем F59A. Ресивер — запасной вариант.
+    /// </summary>
+    public static readonly string[] Pids = { CablePid, ReceiverPid };
     public const int InterfaceId = 1;
     public const int DeviceId = 5;
 
@@ -66,6 +76,19 @@ public sealed class DeviceSession : IDisposable
     public ConnectionState State { get; private set; } = ConnectionState.Disconnected;
     public string? Endpoint { get; private set; }
     public string? ConnectedPid { get; private set; }
+
+    /// <summary>true — активен кабель (F59A), false — ресивер (F53C).</summary>
+    public bool IsCable => ConnectedPid == CablePid;
+
+    /// <summary>
+    /// Максимальная частота опроса для текущего подключения.
+    /// На ресивере радиоканал ограничен 1000 Гц (вендор так и делает),
+    /// на проводе доступны 2000/4000 Гц.
+    /// </summary>
+    public REPORT_RATE MaxReportRate => IsCable ? REPORT_RATE.R_4000 : REPORT_RATE.R_1000;
+
+    /// <summary>Сколько раз подряд сессия переподключалась за один запуск (для диагностики).</summary>
+    public int ReconnectCount { get; private set; }
 
     /// <summary>Полный дамп флеша, полученный последним (только чтение).</summary>
     public FlashDataMap FlashData { get; private set; }
@@ -376,10 +399,108 @@ public sealed class DeviceSession : IDisposable
     {
         if (!plugged && _started)
         {
-            // Мышь выдернули — сбрасываем состояние без записи чего-либо.
-            SetState(ConnectionState.Disconnected);
+            // Мышь выдернули — не крашим процесс, а переводим сессию в поиск
+            // активного эндпоинта. Если остался второй интерфейс (кабель/ресивер),
+            // переключение произойдёт бесшовно.
+            Log("usb: устройство отключено -> Reconnecting");
+            SetState(ConnectionState.Reconnecting);
+            _ = Task.Run(() => RescanAsync(CancellationToken.None));
         }
     }
+
+    /// <summary>
+    /// Быстрый фоновый перескан устройств. Вызывается по WM_DEVICECHANGE и по
+    /// событию от вендорского watcher'а. Не блокирует UI.
+    ///
+    /// Логика приоритета: если подключены оба интерфейса — выбираем кабель.
+    /// Если активный эндпоинт исчез, но есть второй — переключаемся на него.
+    /// Если оба пропали — ждём появления любого.
+    /// </summary>
+    public async Task RescanAsync(CancellationToken ct = default)
+    {
+        // Не запускаем несколько пересканов одновременно.
+        lock (_sync)
+        {
+            if (_rescanning)
+                return;
+            _rescanning = true;
+        }
+
+        try
+        {
+            // Короткая задержка: после выдёргивания кабеля эндпоинт ещё может
+            // быть в списке, но уже не отвечать. Даём Windows время на обработку.
+            await Task.Delay(150, ct);
+
+            string? endpoint = FindDevice(out string pid);
+            if (endpoint == null)
+            {
+                if (State != ConnectionState.Disconnected)
+                {
+                    Log("rescan: устройство не найдено -> Disconnected");
+                    SetState(ConnectionState.Disconnected);
+                }
+                return;
+            }
+
+            // Уже подключены к этому эндпоинту — перезапуск не нужен.
+            if (State == ConnectionState.ConnectedReadOnly &&
+                string.Equals(Endpoint, endpoint, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Log($"rescan: найден pid={pid} ep={endpoint} (было: {ConnectedPid})");
+            ReconnectCount++;
+
+            // Переподключение: закрываем старую сессию и открываем новую.
+            StopInternal();
+            var result = await ConnectReadOnlyAsync(ct);
+            if (result == null && State != ConnectionState.Disconnected)
+            {
+                // Не удалось — пробуем ещё раз через паузу, но не вечно.
+                Log("rescan: переподключение не удалось, повтор через 1 с");
+                await Task.Delay(1000, ct);
+                _ = Task.Run(() => RescanAsync(CancellationToken.None));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Отмена — не ошибка.
+        }
+        catch (Exception ex)
+        {
+            Log($"rescan: исключение {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                _rescanning = false;
+            }
+        }
+    }
+
+    /// <summary>Закрыть текущую USB-сессию без изменения состояния (для переподключения).</summary>
+    private void StopInternal()
+    {
+        if (!_started)
+            return;
+        try
+        {
+            HidUsbNative.CS_UsbServer_SetPCDriverStatus(false);
+            HidUsbNative.Exit();
+        }
+        catch
+        {
+            // Ошибки закрытия не критичны.
+        }
+        _started = false;
+        Endpoint = null;
+        ConnectedPid = null;
+    }
+
+    private bool _rescanning;
 
     // ===== Разбор ответов — 1-в-1 по логике FormMain.onUsbDataReceived =====
 
@@ -518,20 +639,7 @@ public sealed class DeviceSession : IDisposable
             return;
         _disposed = true;
 
-        if (_started)
-        {
-            try
-            {
-                // Отключение — не запись: просто закрываем сессию сервера.
-                HidUsbNative.CS_UsbServer_SetPCDriverStatus(false);
-                HidUsbNative.Exit();
-            }
-            catch
-            {
-                // Игнорируем ошибки при завершении.
-            }
-            _started = false;
-        }
+        StopInternal();
 
         try
         {

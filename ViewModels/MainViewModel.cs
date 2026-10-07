@@ -52,7 +52,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private int _selectedDpiIndex;
     private int _maxDpiLevels = 5;
     private int _selectedButtonIndex = 1;
-    private int _rate125, _rate250, _rate500, _rate1000;   // 1 = выбрано
+    private int _rate125, _rate250, _rate500, _rate1000, _rate2000, _rate4000;   // 1 = выбрано
     private int _sensorModeIndex;
     private int _lodIndex;
     private bool _smoothEnable;
@@ -413,11 +413,24 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         : $"{_batteryPercent}%" + (_isCharging ? " ⚡" : "");
 
     /// <summary>Тип подключения: true — приёмник 2.4G, false — кабель Type-C.</summary>
-    public bool IsWireless => _session.ConnectedPid == DeviceSession.Pids[0];
+    public bool IsWireless => _session.ConnectedPid == DeviceSession.ReceiverPid;
 
-    public string ConnectionText => _session.ConnectedPid == null
-        ? "Нет подключения"
-        : IsWireless ? "Беспроводной" : "Провод";
+    /// <summary>Человекочитаемый статус подключения для статус-бара.</summary>
+    public string ConnectionText => _session.ConnectedPid switch
+    {
+        null => _session.State == ConnectionState.Reconnecting
+            ? "Переподключение…"
+            : "Отключено",
+        DeviceSession.CablePid => "Подключено (провод)",
+        DeviceSession.ReceiverPid => "Подключено (ресивер)",
+        _ => "Подключено"
+    };
+
+    /// <summary>Максимальная частота опроса для текущего подключения.</summary>
+    public REPORT_RATE MaxReportRate => _session.MaxReportRate;
+
+    /// <summary>Доступна ли частота выше 1000 Гц (только на проводе).</summary>
+    public bool HighRatesAllowed => _session.IsCable;
 
     // ===== Телеметрия батареи =====
 
@@ -623,6 +636,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         get => _rate1000 != 0;
         set => SetRate(ref _rate1000, value, REPORT_RATE.R_1000);
+    }
+
+    public bool IsRate2000
+    {
+        get => _rate2000 != 0;
+        set => SetRate(ref _rate2000, value, REPORT_RATE.R_2000);
+    }
+
+    public bool IsRate4000
+    {
+        get => _rate4000 != 0;
+        set => SetRate(ref _rate4000, value, REPORT_RATE.R_4000);
     }
 
     // ===== Параметры сенсора =====
@@ -985,9 +1010,46 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             StatusText = "Мышь отключена.";
         else if (state == ConnectionState.Connecting)
             StatusText = "Подключение…";
+        else if (state == ConnectionState.Reconnecting)
+            StatusText = "Переподключение…";
         else if (state == ConnectionState.Error)
             StatusText = "Таймаут чтения состояния мыши.";
+
+        OnPropertyChanged(nameof(ConnectionText));
+        OnPropertyChanged(nameof(HighRatesAllowed));
+        OnPropertyChanged(nameof(MaxReportRate));
+        EnforceRateLimit();
     });
+
+    /// <summary>
+    /// Ограничение частоты опроса под текущее подключение.
+    /// На ресивере выше 1000 Гц не пускаем; если в флеше записано больше —
+    /// принудительно понижаем до 1000 Гц (без записи в мышь, только в UI).
+    /// </summary>
+    private void EnforceRateLimit()
+    {
+        if (_session.IsCable)
+            return;
+
+        byte current = _working.mouseConfig.reportRate;
+        if (current == (byte)REPORT_RATE.R_2000 || current == (byte)REPORT_RATE.R_4000)
+        {
+            App.Log($"RateLimit: ресивер не поддерживает {current} -> понижаем до 1000 Гц");
+            _working.mouseConfig.reportRate = (byte)REPORT_RATE.R_1000;
+            Set(ref _rate1000, 1, nameof(IsRate1000));
+            Set(ref _rate2000, 0, nameof(IsRate2000));
+            Set(ref _rate4000, 0, nameof(IsRate4000));
+        }
+    }
+
+    /// <summary>
+    /// Быстрый перескан устройств (хот-плаг). Вызывается из MainWindow по
+    /// WM_DEVICECHANGE и из DeviceSession по событию вендорского watcher'а.
+    /// </summary>
+    public async Task RescanAsync()
+    {
+        await _session.RescanAsync(CancellationToken.None);
+    }
 
     private void OnFlashDataUpdated(FlashDataMap map) => RunOnUi(() =>
     {
@@ -1286,6 +1348,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Set(ref _rate250, rate == (byte)REPORT_RATE.R_250 ? 1 : 0, nameof(IsRate250));
         Set(ref _rate500, rate == (byte)REPORT_RATE.R_500 ? 1 : 0, nameof(IsRate500));
         Set(ref _rate1000, rate == (byte)REPORT_RATE.R_1000 ? 1 : 0, nameof(IsRate1000));
+        Set(ref _rate2000, rate == (byte)REPORT_RATE.R_2000 ? 1 : 0, nameof(IsRate2000));
+        Set(ref _rate4000, rate == (byte)REPORT_RATE.R_4000 ? 1 : 0, nameof(IsRate4000));
     }
 
     private void LoadLedUi()
@@ -1414,6 +1478,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (rate != REPORT_RATE.R_250) Set(ref _rate250, 0, nameof(IsRate250));
             if (rate != REPORT_RATE.R_500) Set(ref _rate500, 0, nameof(IsRate500));
             if (rate != REPORT_RATE.R_1000) Set(ref _rate1000, 0, nameof(IsRate1000));
+            if (rate != REPORT_RATE.R_2000) Set(ref _rate2000, 0, nameof(IsRate2000));
+            if (rate != REPORT_RATE.R_4000) Set(ref _rate4000, 0, nameof(IsRate4000));
         }
     }
 

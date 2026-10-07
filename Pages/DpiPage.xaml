@@ -242,9 +242,19 @@
                                      Margin="0,0,8,0" />
                         <RadioButton Style="{StaticResource SegmentRadioButton}"
                                      Content="1000 Гц"
-                                     IsChecked="{Binding IsRate1000, Mode=TwoWay}" />
+                                     IsChecked="{Binding IsRate1000, Mode=TwoWay}"
+                                     Margin="0,0,8,0" />
+                        <RadioButton Style="{StaticResource SegmentRadioButton}"
+                                     Content="2000 Гц"
+                                     IsChecked="{Binding IsRate2000, Mode=TwoWay}"
+                                     IsEnabled="{Binding HighRatesAllowed}"
+                                     Margin="0,0,8,0" />
+                        <RadioButton Style="{StaticResource SegmentRadioButton}"
+                                     Content="4000 Гц"
+                                     IsChecked="{Binding IsRate4000, Mode=TwoWay}"
+                                     IsEnabled="{Binding HighRatesAllowed}" />
                     </StackPanel>
-                    <TextBlock Text="Выше частота — плавнее курсор, но выше нагрузка на радиоканал."
+                    <TextBlock Text="Выше частота — плавнее курсор, но выше нагрузка на радиоканал. 2000/4000 Гц доступны только на проводе."
                                Opacity="0.5"
                                FontSize="11"
                                Margin="0,10,0,0"
