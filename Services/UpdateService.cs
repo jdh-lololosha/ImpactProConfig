@@ -87,18 +87,25 @@ internal sealed class UpdateService
     }
 
     /// <summary>
-    /// Портативное самообновление: качаем .zip, распаковываем во временную
-    /// папку, откладываем скрипт-обновитель (ждёт выхода процесса, копирует
-    /// файлы поверх приложения, перезапускает exe) и завершаем приложение.
+    /// Портативное самообновление (классическая схема с отдельным процессом):
+    ///  1. качаем .zip новой версии во временную папку (%TEMP%);
+    ///  2. запускаем Updater.exe с аргументами --zip / --target / --pid;
+    ///  3. выходим из приложения — апдейтер дождётся выхода, распакует архив
+    ///     поверх папки приложения, удалит zip и перезапустит exe.
+    ///
+    /// Запущенный Windows exe нельзя перезаписать — в этом весь смысл
+    /// отдельного процесса. Копия апдейтера кладётся в ту же временную папку:
+    /// Updater.exe в папке приложения сам является обновляемым файлом.
     /// Прав админа не нужно — программа живёт в своей папке.
     /// </summary>
     public static async Task DownloadAndUpdateAsync(string zipUrl)
     {
-        string updateRoot = Path.Combine(Path.GetTempPath(),
+        string tempDir = Path.Combine(Path.GetTempPath(),
             $"ImpactProConfig-update-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(updateRoot);
+        Directory.CreateDirectory(tempDir);
+        string zipPath = Path.Combine(tempDir, "update.zip");
 
-        string zipPath = Path.Combine(updateRoot, "update.zip");
+        CleanupOldUpdateDirs(tempDir);
 
         using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("ImpactProConfig");
@@ -109,58 +116,51 @@ internal sealed class UpdateService
             await source.CopyToAsync(dest);
         }
 
-        // Распаковка архива (System.IO.Compression — без внешних утилит).
-        System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, updateRoot);
-        File.Delete(zipPath);
-
-        // В архиве файлы лежат в корне publish/: exe должен быть найден.
-        string exeName = "ImpactProConfig.exe";
-        string srcRoot = File.Exists(Path.Combine(updateRoot, exeName))
-            ? updateRoot
-            : Directory.GetDirectories(updateRoot).FirstOrDefault()
-              ?? updateRoot;
-
         string appDir = AppContext.BaseDirectory.TrimEnd('\\');
-        string appExe = Path.Combine(appDir, exeName);
+        string updaterSrc = Path.Combine(appDir, "Updater.exe");
+        if (!File.Exists(updaterSrc))
+            throw new FileNotFoundException(
+                "Updater.exe отсутствует рядом с приложением — автообновление невозможно.");
 
-        // Скрипт-обновитель: отдельный powershell, скрытое окно.
-        //  1) ждёт, пока текущий процесс завершится (файлы больше не заняты);
-        //  2) копирует новые файлы поверх папки приложения;
-        //  3) запускает обновлённый exe и удаляет временную папку;
-        //  4) если папка приложения недоступна на запись (старая установка
-        //     в Program Files) — просто открывает распакованную новую версию.
+        // Копия апдейтера во временную папку: в папке приложения свой же
+        // Updater.exe запущен и перезаписать его нельзя (те же блокировки exe).
+        string updaterCopy = Path.Combine(tempDir, "Updater.exe");
+        File.Copy(updaterSrc, updaterCopy, overwrite: true);
+
         int pid = Environment.ProcessId;
-        string scriptPath = Path.Combine(updateRoot, "apply-update.ps1");
-        string script = $@"
-$src = '{Escape(srcRoot)}'
-$dst = '{Escape(appDir)}'
-$exe = '{Escape(appExe)}'
-$me  = {pid}
-for ($i = 0; $i -lt 120 -and (Get-Process -Id $me -ErrorAction SilentlyContinue); $i++) {{ Start-Sleep -Seconds 1 }}
-try {{
-    Copy-Item -Path (Join-Path $src '*') -Destination $dst -Recurse -Force -ErrorAction Stop
-    Start-Process -FilePath $exe -WorkingDirectory $dst
-    Remove-Item -LiteralPath '{Escape(updateRoot)}' -Recurse -Force -ErrorAction SilentlyContinue
-}} catch {{
-    # Нет прав на запись — оставляем новую версию рядом, пусть пользователь сам заменит.
-    Start-Process -FilePath $src
-}}
-";
-        // UTF-8 с BOM: powershell читает кириллические пути корректно.
-        File.WriteAllText(scriptPath, script, new System.Text.UTF8Encoding(true));
-
-        Process.Start(new ProcessStartInfo
+        _ = Process.Start(new ProcessStartInfo
         {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{scriptPath}\"",
-            UseShellExecute = true,
+            FileName = updaterCopy,
+            Arguments = $"--zip \"{zipPath}\" --target \"{appDir}\" --pid {pid}",
+            UseShellExecute = false,
             CreateNoWindow = true,
         });
 
-        App.Log($"Update: zip скачан и распакован ({srcRoot}), обновитель запущен, выход приложения");
+        App.Log($"Update: zip скачан, Updater.exe запущен (pid={pid}), выход приложения");
     }
 
-    private static string Escape(string s) => s.Replace("'", "''");
+    /// <summary>
+    /// Подметаём папки прошлых обновлений в %TEMP% (включая старую
+    /// powershell-схему). Залоченные недавним обновлением — молча пропускаем.
+    /// </summary>
+    private static void CleanupOldUpdateDirs(string keepDir)
+    {
+        try
+        {
+            string temp = Path.GetTempPath();
+            foreach (var dir in Directory.GetDirectories(temp, "ImpactProConfig-update-*"))
+            {
+                if (string.Equals(dir.TrimEnd('\\'), keepDir.TrimEnd('\\'),
+                        StringComparison.OrdinalIgnoreCase))
+                    continue;
+                try { Directory.Delete(dir, true); } catch { /* залочено — не критично */ }
+            }
+        }
+        catch
+        {
+            // Чистка не критична.
+        }
+    }
 
     /// <summary>Версия из тега вида «v1.2.0» или «1.2.0-beta».</summary>
     private static Version? ParseVersion(string tag)

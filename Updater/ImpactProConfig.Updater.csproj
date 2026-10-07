@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Отдельный лёгкий процесс-обновитель. Запущенный основной exe нельзя
+         перезаписать, поэтому замену файлов выполняет независимый Updater.exe.
+         NativeAOT: один маленький exe без зависимости от .NET-рантайма
+         (портативные пользователи рантайм могут не иметь). -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Updater</AssemblyName>
+    <RootNamespace>ImpactProConfig.Updater</RootNamespace>
+    <Version>1.1.7</Version>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <StripSymbols>true</StripSymbols>
+    <OptimizationLevel>Size</OptimizationLevel>
+  </PropertyGroup>
+
+</Project>

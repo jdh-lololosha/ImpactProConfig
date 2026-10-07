@@ -3,7 +3,7 @@
   <PropertyGroup>
     <!-- Вложенный StructureTest не должен попадать в glob основного проекта
          (иначе его obj\*.AssemblyInfo.cs даёт CS0579 в _wpftmp-сборке). -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);StructureTest\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);StructureTest\**;Updater\**</DefaultItemExcludes>
     <OutputType>WinExe</OutputType>
     <!-- windows10.0.17763.0 — нужен для WinRT toast-уведомлений
          (Windows.UI.Notifications) в Services/ToastHelper.cs. -->
@@ -51,5 +51,15 @@
     <!-- Иконка приложения: в ресурсах — для Window.Icon, в ApplicationIcon — для exe. -->
     <Resource Include="Assets\app.ico" />
   </ItemGroup>
+
+  <!-- Updater.exe собирается тем же `dotnet publish` и кладётся рядом с основным
+       exe: автообновлению нужен отдельный процесс-обновитель в одной папке
+       (запущенный основной exe перезаписать нельзя). В релизный zip апдейтер
+       попадает из publish/ (build-portable.ps1 проверяет его наличие). -->
+  <Target Name="PublishUpdater" AfterTargets="Publish">
+    <MSBuild Projects="Updater\ImpactProConfig.Updater.csproj"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;PublishDir=$(PublishDir)" />
+  </Target>
 
 </Project>

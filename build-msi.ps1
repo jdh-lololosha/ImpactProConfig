@@ -31,6 +31,8 @@ $OutMsi = Join-Path $PSScriptRoot "ImpactProConfig-v$productVersion-Setup.msi"
 $exe = Join-Path $PublishDir 'ImpactProConfig.exe'
 if (-not (Test-Path $exe)) { throw "Publish dir not found or no ImpactProConfig.exe: $PublishDir" }
 if (-not (Test-Path (Join-Path $PublishDir 'hidusb.dll'))) { throw "hidusb.dll missing in publish dir!" }
+# Updater.exe — процесс-обновитель (цель PublishUpdater основного csproj).
+if (-not (Test-Path (Join-Path $PublishDir 'Updater.exe'))) { throw "Updater.exe missing in publish dir!" }
 
 function New-DeterministicGuid([string]$s) {
     $md5 = [System.Security.Cryptography.MD5]::Create()

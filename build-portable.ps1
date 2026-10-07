@@ -28,6 +28,10 @@ $exe = Join-Path $PublishDir 'ImpactProConfig.exe'
 if (-not (Test-Path $exe)) { throw "Publish dir not found or no ImpactProConfig.exe: $PublishDir" }
 # hidusb.dll обязателен: без него протокол не загрузится (см. AGENTS.md).
 if (-not (Test-Path (Join-Path $PublishDir 'hidusb.dll'))) { throw "hidusb.dll missing in publish dir!" }
+# Updater.exe обязателен: без него автообновление не сможет заменить файлы
+# запущенного exe (см. UpdateService.DownloadAndUpdateAsync). Его собирает
+# цель PublishUpdater основного csproj при `dotnet publish`.
+if (-not (Test-Path (Join-Path $PublishDir 'Updater.exe'))) { throw "Updater.exe missing in publish dir! (dotnet publish основного проекта собирает его в Updater\)" }
 
 $OutZip = Join-Path $PSScriptRoot "ImpactProConfig-v$productVersion-Portable.zip"
 

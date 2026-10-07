@@ -283,11 +283,15 @@ public partial class MainWindow : FluentWindow
         });
     }
 
-    /// <summary>«Выход» из меню трея — единственный путь, который реально закрывает окно.</summary>
+    /// <summary>
+    /// «Выход» из меню трея и после запуска обновления — единственный путь,
+    /// который реально закрывает приложение (Closing в трей не прячет при
+    /// выставленном _exitRequested).
+    /// </summary>
     private void RequestExit()
     {
         _exitRequested = true;
-        Dispatcher.Invoke(Close);
+        Application.Current.Shutdown();
     }
 
     /// <summary>Крестик и Alt+F4 прячут окно в трей; выход — только через трей.</summary>

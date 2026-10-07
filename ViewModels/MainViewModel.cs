@@ -505,8 +505,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>
-    /// Портативное обновление: скачать .zip, распаковать, запустить
-    /// скрипт-обновитель и выйти — тот заменит файлы и перезапустит exe.
+    /// Портативное обновление: скачать .zip, запустить отдельный Updater.exe
+    /// и выйти — тот дождётся выхода, заменит файлы и перезапустит exe.
     /// </summary>
     public async Task InstallUpdateAsync()
     {
