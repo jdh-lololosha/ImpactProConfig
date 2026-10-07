@@ -11,6 +11,7 @@ obj/
 publish/
 build/
 *.msi
+*.wixpdb
 
 # Локальные настройки приложения (пишутся рядом с exe, т.е. в bin/)
 app_settings.json
