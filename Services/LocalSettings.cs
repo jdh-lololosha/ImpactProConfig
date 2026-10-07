@@ -37,8 +37,10 @@ internal sealed class LocalSettings
 /// </summary>
 internal static class LocalSettingsStore
 {
+    // %LOCALAPPDATA%\ImpactProConfig, а не рядом с exe: приложение стоит в
+    // Program Files, куда обычный пользователь писать не может.
     private static readonly string FilePath =
-        Path.Combine(AppContext.BaseDirectory, "app_settings.json");
+        Path.Combine(App.DataDir, "app_settings.json");
 
     private static readonly object Gate = new();
 

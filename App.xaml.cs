@@ -7,12 +7,39 @@ namespace ImpactProConfig;
 
 public partial class App : Application
 {
+    /// <summary>
+    /// Папка для логов и пользовательских данных: %LOCALAPPDATA%\ImpactProConfig.
+    ///
+    /// Почему не AppContext.BaseDirectory: приложение ставится в Program Files,
+    /// куда обычный пользователь писать не может. Запись туда молча падала
+    /// (пустой catch), из-за чего диагностика выглядела как «процесс жив, а окна
+    /// нет». LocalApplicationData доступен на запись всегда и без админа.
+    /// </summary>
+    internal static string DataDir
+    {
+        get
+        {
+            string dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ImpactProConfig");
+            try
+            {
+                Directory.CreateDirectory(dir);
+            }
+            catch
+            {
+                // Если даже это недоступно — работаем без логов, но не падаем.
+            }
+            return dir;
+        }
+    }
+
     internal static void Log(string msg)
     {
         try
         {
             File.AppendAllText(
-                Path.Combine(AppContext.BaseDirectory, "crash.log"),
+                Path.Combine(DataDir, "crash.log"),
                 $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\n");
         }
         catch

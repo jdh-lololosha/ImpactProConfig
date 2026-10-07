@@ -101,7 +101,7 @@ public sealed class DeviceSession : IDisposable
         try
         {
             File.AppendAllText(
-                Path.Combine(AppContext.BaseDirectory, "session.log"),
+                Path.Combine(App.DataDir, "session.log"),
                 $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\n");
         }
         catch

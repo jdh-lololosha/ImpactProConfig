@@ -70,7 +70,7 @@ public partial class MainWindow : FluentWindow
             lock (UiLogLock)
             {
                 File.AppendAllText(
-                    Path.Combine(AppContext.BaseDirectory, "ui.log"),
+                    Path.Combine(App.DataDir, "ui.log"),
                     $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\n");
             }
         }

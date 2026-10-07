@@ -59,7 +59,9 @@ internal sealed class BatteryStatsService
 
     public BatteryStatsService(string? directory = null)
     {
-        _path = Path.Combine(directory ?? AppContext.BaseDirectory, FileName);
+        // По умолчанию %LOCALAPPDATA%\ImpactProConfig — туда есть права на запись
+        // у любого пользователя. Рядом с exe (Program Files) писать нельзя.
+        _path = Path.Combine(directory ?? App.DataDir, FileName);
     }
 
     /// <summary>Сколько всего накоплено точек (для UI).</summary>
