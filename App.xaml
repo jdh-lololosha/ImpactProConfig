@@ -1,0 +1,509 @@
+<Application x:Class="ImpactProConfig.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ui:ThemesDictionary Theme="Dark" />
+                <ui:ControlsDictionary />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- ===== Токены дизайна ===== -->
+            <!-- Фирменный красный Ardor (требование: #E81123 / #FF2E2E). -->
+            <Color x:Key="ImpactAccentColor">#E81123</Color>
+            <SolidColorBrush x:Key="ImpactAccentBrush" Color="#E81123" />
+            <SolidColorBrush x:Key="ImpactAccentHoverBrush" Color="#FF2E2E" />
+            <SolidColorBrush x:Key="ImpactSurfaceBrush" Color="#2B2B2B" />
+            <SolidColorBrush x:Key="ImpactSurfaceHoverBrush" Color="#383838" />
+            <SolidColorBrush x:Key="ImpactStrokeBrush" Color="#4A4A4A" />
+            <SolidColorBrush x:Key="ImpactTextBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ImpactTextSecondaryBrush" Color="#B5B5B5" />
+
+            <!-- Контраст на акценте: в тёмной теме WPF-UI текст на акценте чёрный —
+                 на нашем красном это плохо читается. Делаем светлым (правило:
+                 светлый текст на тёмном/акцентном фоне). -->
+            <SolidColorBrush x:Key="AccentButtonForeground" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="AccentButtonForegroundPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="AccentButtonForegroundPressed" Color="#80FFFFFF" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="CheckBoxCheckGlyphForeground" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="RadioButtonCheckGlyphFill" Color="#FFFFFF" />
+
+            <!-- ===== Карточки: своя заливка, обводка #25FFFFFF, радиус 8 ===== -->
+            <!-- BasedOn НЕ работает: {x:Type ui:Card} не находится в словарях
+                 (стиль Card приходит только через дефолтный стиль сборки), поэтому
+                 шаблон задаём целиком — с TemplateBinding всех свойств. -->
+            <Style TargetType="{x:Type ui:Card}">
+                <Setter Property="Foreground" Value="#FFFFFF" />
+                <Setter Property="Background" Value="#14FFFFFF" />
+                <Setter Property="BorderBrush" Value="#25FFFFFF" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Padding" Value="14,16" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="VerticalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="SnapsToDevicePixels" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ui:Card}">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="8"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Светлый текст на тёмной теме: TextBlock по умолчанию наследует чёрный
+                 (SystemColors), глобально делаем белым; индивидуальные Foreground
+                 и Opacity в разметке продолжают работать. -->
+            <Style TargetType="{x:Type TextBlock}">
+                <Setter Property="Foreground" Value="#FFFFFF" />
+            </Style>
+
+            <!-- ui:TextBlock (класс WPF-UI) — отдельный тип, для него тоже нужен
+                 светлый Foreground (заголовки страниц). -->
+            <Style TargetType="{x:Type ui:TextBlock}">
+                <Setter Property="Foreground" Value="#FFFFFF" />
+            </Style>
+
+            <!-- ===================== Slider ===================== -->
+            <Style TargetType="{x:Type Slider}">
+                <Setter Property="Foreground" Value="{StaticResource ImpactAccentBrush}" />
+                <Setter Property="Background" Value="#3A3A3A" />
+                <Setter Property="IsMoveToPointEnabled" Value="True" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type Slider}">
+                            <Grid Background="Transparent" Margin="0,10,0,10">
+                                <!-- Дорожка -->
+                                <Border x:Name="TrackLine"
+                                        Height="4"
+                                        VerticalAlignment="Center"
+                                        CornerRadius="2"
+                                        Background="{TemplateBinding Background}" />
+                                <Track x:Name="PART_Track" IsDirectionReversed="False">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static Slider.DecreaseLarge}"
+                                                      Focusable="False"
+                                                      IsTabStop="False">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="{x:Type RepeatButton}">
+                                                    <Border Height="4"
+                                                            VerticalAlignment="Center"
+                                                            CornerRadius="2"
+                                                            Background="{StaticResource ImpactAccentBrush}" />
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static Slider.IncreaseLarge}"
+                                                      Focusable="False"
+                                                      IsTabStop="False">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="{x:Type RepeatButton}">
+                                                    <Border Background="Transparent" />
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb Focusable="False">
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="{x:Type Thumb}">
+                                                    <Grid Background="Transparent">
+                                                        <Ellipse x:Name="ThumbDot"
+                                                                 Width="16"
+                                                                 Height="16"
+                                                                 Fill="White"
+                                                                 Stroke="#00000055"
+                                                                 StrokeThickness="1" />
+                                                    </Grid>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="ThumbDot" Property="Width" Value="18" />
+                                                            <Setter TargetName="ThumbDot" Property="Height" Value="18" />
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- ===================== RadioButton ===================== -->
+            <Style TargetType="{x:Type RadioButton}">
+                <Setter Property="Foreground" Value="{StaticResource ImpactTextBrush}" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type RadioButton}">
+                            <StackPanel Orientation="Horizontal"
+                                        Background="{TemplateBinding Background}"
+                                        Margin="0,3">
+                                <Grid Width="20" Height="20" VerticalAlignment="Center">
+                                    <Ellipse x:Name="OuterRing"
+                                             Width="18"
+                                             Height="18"
+                                             HorizontalAlignment="Center"
+                                             VerticalAlignment="Center"
+                                             Fill="Transparent"
+                                             Stroke="#7A7A7A"
+                                             StrokeThickness="1.5" />
+                                    <Ellipse x:Name="CheckDot"
+                                             Width="8"
+                                             Height="8"
+                                             HorizontalAlignment="Center"
+                                             VerticalAlignment="Center"
+                                             Fill="{StaticResource ImpactAccentBrush}"
+                                             Visibility="Collapsed" />
+                                </Grid>
+                                <ContentPresenter Margin="8,0,0,0"
+                                                  VerticalAlignment="Center"
+                                                  RecognizesAccessKey="True" />
+                            </StackPanel>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="OuterRing" Property="Stroke" Value="{StaticResource ImpactAccentBrush}" />
+                                    <Setter TargetName="CheckDot" Property="Visibility" Value="Visible" />
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="OuterRing" Property="Stroke" Value="White" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.4" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- ========== RadioButton-сегмент (частота опроса и т.п.) ========== -->
+            <Style x:Key="SegmentRadioButton" TargetType="{x:Type RadioButton}">
+                <Setter Property="Foreground" Value="{StaticResource ImpactTextSecondaryBrush}" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type RadioButton}">
+                            <Border x:Name="SegmentBg"
+                                    Background="{StaticResource ImpactSurfaceBrush}"
+                                    BorderBrush="{StaticResource ImpactStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="14,7"
+                                    SnapsToDevicePixels="True">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  RecognizesAccessKey="True" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="SegmentBg" Property="Background" Value="{StaticResource ImpactAccentBrush}" />
+                                    <Setter TargetName="SegmentBg" Property="BorderBrush" Value="{StaticResource ImpactAccentBrush}" />
+                                    <Setter Property="Foreground" Value="White" />
+                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="SegmentBg" Property="Background" Value="{StaticResource ImpactSurfaceHoverBrush}" />
+                                </Trigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsMouseOver" Value="True" />
+                                        <Condition Property="IsChecked" Value="True" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="SegmentBg" Property="Background" Value="{StaticResource ImpactAccentHoverBrush}" />
+                                </MultiTrigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.4" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- ===================== ComboBox ===================== -->
+            <Style TargetType="{x:Type ComboBox}">
+                <Setter Property="Foreground" Value="{StaticResource ImpactTextBrush}" />
+                <!-- Объёмная плашка: заметный полупрозрачный фон, тонкая рамка,
+                     фиксированная высота 34, внутренние отступы 12/10. -->
+                <Setter Property="Background" Value="#20FFFFFF" />
+                <Setter Property="BorderBrush" Value="#35FFFFFF" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Padding" Value="12,0,10,0" />
+                <Setter Property="Height" Value="34" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="SnapsToDevicePixels" Value="True" />
+                <Setter Property="MaxDropDownHeight" Value="280" />
+                <!-- Зебра: чередование фонов пунктов выпадающего списка -->
+                <Setter Property="AlternationCount" Value="2" />
+                <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+                <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+                <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+                <!-- Клик по телу комбо открывает/закрывает список напрямую.
+                     Прежний прозрачный ToggleButton-оверлей в шаблоне имел нулевой
+                     размер (tb=0x0 в ui.log): hit-test падал на Chrome/Chevron,
+                     клик до кнопки не доходил и список не открывался. -->
+                <EventSetter Event="PreviewMouseLeftButtonDown" Handler="Combo_PreviewMouseLeftButtonDown" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ComboBox}">
+                            <Grid>
+                                <!-- Плашка-хром: фон + рамка + радиус 6 (поверх — прозрачный toggle) -->
+                                <Border x:Name="Chrome"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="6"
+                                        SnapsToDevicePixels="True">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <ContentPresenter Grid.Column="0"
+                                                          x:Name="ContentSite"
+                                                          Margin="{TemplateBinding Padding}"
+                                                          Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource TemplatedParent}}"
+                                                          ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource TemplatedParent}}"
+                                                          ContentTemplateSelector="{Binding SelectionBoxItemTemplateSelector, RelativeSource={RelativeSource TemplatedParent}}"
+                                                          VerticalAlignment="Center"
+                                                          HorizontalAlignment="Left"
+                                                          IsHitTestVisible="False" />
+
+                                        <!-- Тонкий разделитель перед шевроном -->
+                                        <Rectangle Grid.Column="1"
+                                                   x:Name="ChevronSep"
+                                                   Width="1"
+                                                   Height="16"
+                                                   Margin="0,0,9,0"
+                                                   VerticalAlignment="Center"
+                                                   Fill="#24FFFFFF" />
+
+                                        <!-- Шеврон вниз, отделён от текста справа -->
+                                        <Path Grid.Column="2"
+                                              x:Name="Chevron"
+                                              Width="10"
+                                              Height="6"
+                                              Margin="0,0,12,0"
+                                              VerticalAlignment="Center"
+                                              Data="M 0.75,0.75 L 5,5 L 9.25,0.75"
+                                              Stroke="{StaticResource ImpactTextSecondaryBrush}"
+                                              StrokeThickness="1.5"
+                                              StrokeStartLineCap="Round"
+                                              StrokeEndLineCap="Round"
+                                              StrokeLineJoin="Round"
+                                              RenderTransformOrigin="0.5,0.5" />
+                                    </Grid>
+                                </Border>
+
+                                <!-- ToggleButton-оверлей удалён: он получал нулевой размер
+                                     (tb=0x0 в ui.log) и никогда не перехватывал клик.
+                                     Переключение списка делает сам ComboBox через
+                                     EventSetter PreviewMouseLeftButtonDown в стиле. -->
+
+                                <Popup x:Name="PART_Popup"
+                                       Placement="Bottom"
+                                       AllowsTransparency="True"
+                                       IsOpen="{TemplateBinding IsDropDownOpen}"
+                                       PopupAnimation="Slide"
+                                       Focusable="False">
+                                    <Border MinWidth="{TemplateBinding ActualWidth}"
+                                            MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                            Margin="0,5,0,0"
+                                            Background="{StaticResource ImpactSurfaceBrush}"
+                                            BorderBrush="#35FFFFFF"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            SnapsToDevicePixels="True">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="#000000"
+                                                              BlurRadius="16"
+                                                              ShadowDepth="3"
+                                                              Direction="270"
+                                                              Opacity="0.6" />
+                                        </Border.Effect>
+                                        <ScrollViewer SnapsToDevicePixels="True">
+                                            <StackPanel IsItemsHost="True"
+                                                        KeyboardNavigation.DirectionalNavigation="Contained" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <!-- Ховер: фон заметно светлеет + красное свечение рамки -->
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Chrome" Property="Background" Value="#32FFFFFF" />
+                                    <Setter TargetName="Chrome" Property="BorderBrush" Value="#5AFFFFFF" />
+                                    <Setter TargetName="Chrome" Property="Effect">
+                                        <Setter.Value>
+                                            <DropShadowEffect Color="#E81123"
+                                                              BlurRadius="10"
+                                                              ShadowDepth="0"
+                                                              Opacity="0.55" />
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Setter TargetName="Chevron" Property="Stroke" Value="White" />
+                                    <Setter TargetName="ChevronSep" Property="Fill" Value="#40FFFFFF" />
+                                </Trigger>
+                                <!-- Открыт: рамка на акцент, шеврон развёрнут вверх -->
+                                <Trigger Property="IsDropDownOpen" Value="True">
+                                    <Setter TargetName="Chrome" Property="Background" Value="#2AFFFFFF" />
+                                    <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource ImpactAccentBrush}" />
+                                    <Setter TargetName="Chevron" Property="RenderTransform">
+                                        <Setter.Value>
+                                            <RotateTransform Angle="180" />
+                                        </Setter.Value>
+                                    </Setter>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.45" />
+                                </Trigger>
+                                <Trigger Property="IsEditable" Value="True">
+                                    <Setter Property="Focusable" Value="True" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style TargetType="{x:Type ComboBoxItem}">
+                <Setter Property="Foreground" Value="{StaticResource ImpactTextSecondaryBrush}" />
+                <Setter Property="Padding" Value="10,7" />
+                <Setter Property="Margin" Value="5,1" />
+                <Setter Property="SnapsToDevicePixels" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ComboBoxItem}">
+                            <!-- Пункт: фон-плитка + красная планка слева (ховер/выбор) -->
+                            <Grid Margin="{TemplateBinding Margin}">
+                                <Border x:Name="ItemBorder"
+                                        Background="Transparent"
+                                        CornerRadius="4"
+                                        Padding="{TemplateBinding Padding}"
+                                        SnapsToDevicePixels="True">
+                                    <ContentPresenter VerticalAlignment="Center" />
+                                </Border>
+                                <Rectangle x:Name="AccentBar"
+                                           Width="3"
+                                           Margin="4,5,0,5"
+                                           HorizontalAlignment="Left"
+                                           VerticalAlignment="Stretch"
+                                           RadiusX="1.5"
+                                           RadiusY="1.5"
+                                           Fill="{StaticResource ImpactAccentBrush}"
+                                           Opacity="0"
+                                           Visibility="Collapsed" />
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <!-- Зебра: нечётные пункты чуть светлее — ритм вместо плоскости -->
+                                <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                    <Setter TargetName="ItemBorder" Property="Background" Value="#0AFFFFFF" />
+                                </Trigger>
+                                <!-- Ховер: подложка светлеет + проявляется красная планка -->
+                                <Trigger Property="IsHighlighted" Value="True">
+                                    <Setter TargetName="ItemBorder" Property="Background" Value="#26FFFFFF" />
+                                    <Setter TargetName="AccentBar" Property="Visibility" Value="Visible" />
+                                    <Setter TargetName="AccentBar" Property="Opacity" Value="0.55" />
+                                    <Setter Property="Foreground" Value="White" />
+                                </Trigger>
+                                <!-- Выбор: красный градиент-подложка + планка + акцентный вес -->
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter TargetName="ItemBorder" Property="Background">
+                                        <Setter.Value>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                <GradientStop Color="#45E81123" Offset="0" />
+                                                <GradientStop Color="#12E81123" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Setter TargetName="AccentBar" Property="Visibility" Value="Visible" />
+                                    <Setter TargetName="AccentBar" Property="Opacity" Value="1" />
+                                    <Setter Property="Foreground" Value="White" />
+                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.4" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- ===================== CheckBox ===================== -->
+            <Style TargetType="{x:Type CheckBox}">
+                <Setter Property="Foreground" Value="{StaticResource ImpactTextBrush}" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type CheckBox}">
+                            <StackPanel Orientation="Horizontal"
+                                        Background="Transparent"
+                                        Margin="0,3">
+                                <Grid Width="20" Height="20" VerticalAlignment="Center">
+                                    <Border x:Name="BoxBorder"
+                                            Width="18"
+                                            Height="18"
+                                            CornerRadius="4"
+                                            Background="{StaticResource ImpactSurfaceBrush}"
+                                            BorderBrush="{StaticResource ImpactStrokeBrush}"
+                                            BorderThickness="1.5" />
+                                    <Path x:Name="CheckGlyph"
+                                          Data="M 3.5,9 L 7.5,13 L 15,4.5"
+                                          Stroke="White"
+                                          StrokeThickness="2"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          StrokeLineJoin="Round"
+                                          Visibility="Collapsed" />
+                                </Grid>
+                                <ContentPresenter Margin="8,0,0,0"
+                                                  VerticalAlignment="Center"
+                                                  RecognizesAccessKey="True" />
+                            </StackPanel>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="BoxBorder" Property="Background" Value="{StaticResource ImpactAccentBrush}" />
+                                    <Setter TargetName="BoxBorder" Property="BorderBrush" Value="{StaticResource ImpactAccentBrush}" />
+                                    <Setter TargetName="CheckGlyph" Property="Visibility" Value="Visible" />
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="BoxBorder" Property="BorderBrush" Value="White" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.4" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

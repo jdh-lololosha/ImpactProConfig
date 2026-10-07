@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Вложенный StructureTest не должен попадать в glob основного проекта
+         (иначе его obj\*.AssemblyInfo.cs даёт CS0579 в _wpftmp-сборке). -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);StructureTest\**</DefaultItemExcludes>
+    <OutputType>WinExe</OutputType>
+    <!-- windows10.0.17763.0 — нужен для WinRT toast-уведомлений
+         (Windows.UI.Notifications) в Services/ToastHelper.cs. -->
+    <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>ImpactProConfig</RootNamespace>
+    <AssemblyName>ImpactProConfig</AssemblyName>
+    <ApplicationIcon />
+    <Version>1.0.0</Version>
+    <Authors>ImpactProConfig</Authors>
+    <Product>ARDOR GAMING Impact PRO Config</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="3.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="hidusb.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Изображение мыши встраивается в сборку (pack-URI /Assets/dev3.png). -->
+    <None Remove="Assets\dev3.png" />
+    <Resource Include="Assets\dev3.png" />
+  </ItemGroup>
+
+</Project>

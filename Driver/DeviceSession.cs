@@ -1,0 +1,522 @@
+using System.IO;
+using System.Runtime.InteropServices;
+
+namespace ImpactProConfig.Driver;
+
+public enum ConnectionState
+{
+    Disconnected,
+    Connecting,
+    ConnectedReadOnly,
+    Error
+}
+
+public sealed class FlashReadResult
+{
+    public required FlashDataMap Map { get; init; }
+    public BatteryStatus Battery { get; set; }
+    public int Version { get; set; }
+    public DeviceInfo DeviceInfo { get; set; }
+}
+
+/// <summary>Результат «Применить»: запись + побайтовая проверка перечитанным флешем.</summary>
+public sealed class WriteResult
+{
+    public bool Success { get; init; }
+    public int DiffBytes { get; init; }
+    public string? Error { get; init; }
+    public FlashDataMap VerifiedMap { get; init; }
+}
+
+/// <summary>
+/// Сессия с мышью. ГАРАНТИЯ БЕЗОПАСНОСТИ:
+///  - при старте выполняются ТОЛЬКО функции чтения (см. HidUsbNative);
+///  - ни одной записи во флеш: нет ни одного вызова записывающих
+///    функций вендора (CS_ProtocolDataUpdate / CompareUpdate / SetClearSetting / ...);
+///  - все USB-вызовы идут из Task.Run — UI не блокируется.
+///
+/// Последовательность подключения повторяет официалку (FormMain.DeviceConnect):
+///  FindHidDevicesByDeviceId -> GetDeviceOnLine -> Start -> SetPCDriverStatus(true)
+///  -> ReadAllFlashData -> ожидание полного дампа (6912 байт) -> парсинг.
+/// </summary>
+public sealed class DeviceSession : IDisposable
+{
+    // VID и PID из Config.ini официалки + спецификации устройства.
+    // VID = 3554, кабель = F59A, ресивер = F53C.
+    public const string Vid = "3554";
+    public static readonly string[] Pids = { "F53C", "F59A" }; // ресивер, кабель
+    public const int InterfaceId = 1;
+    public const int DeviceId = 5;
+
+    private const int FlashDataLength = 6912;   // MAX_FLASH_SIZE из DataParser
+    private const int ReadTimeoutMs = 8000;
+
+    // Делегаты держим в полях, чтобы GC не убил их во время нативных вызовов.
+    private readonly HidUsbNative.OnUsbDataReceived _dataReceived;
+    private readonly HidUsbNative.OnUsbChanged _usbChanged;
+
+    private readonly object _sync = new();
+    private TaskCompletionSource<FlashReadResult>? _flashTcs;
+    private TaskCompletionSource<BatteryStatus>? _batteryTcs;
+    private TaskCompletionSource<int>? _versionTcs;
+    private bool _started;
+    private bool _disposed;
+
+    public ConnectionState State { get; private set; } = ConnectionState.Disconnected;
+    public string? Endpoint { get; private set; }
+    public string? ConnectedPid { get; private set; }
+
+    /// <summary>Полный дамп флеша, полученный последним (только чтение).</summary>
+    public FlashDataMap FlashData { get; private set; }
+
+    public event Action<ConnectionState>? StateChanged;
+    public event Action<FlashDataMap>? FlashDataUpdated;
+    public event Action<BatteryStatus>? BatteryUpdated;
+    public event Action<byte>? CurrentDpiChanged;     // address=4, 1 байт
+    public event Action<byte>? ReportRateChanged;     // address=0, 1 байт
+    public event Action<DPILed>? DpiLedUpdated;
+    public event Action<LedBar>? LedBarUpdated;
+    public event Action<DeviceStatusChanged>? StatusChanged;
+    public event Action<byte>? ProfileChanged;        // id=14, индекс профиля 0..3
+
+    public DeviceSession()
+    {
+        _dataReceived = OnUsbDataReceived;
+        _usbChanged = OnUsbChangedEvent;
+    }
+
+    private void SetState(ConnectionState s)
+    {
+        State = s;
+        Log($"state -> {s}" + (Endpoint != null ? $" ep={Endpoint} pid={ConnectedPid}" : ""));
+        StateChanged?.Invoke(s);
+    }
+
+    // Компактный трассировочный лог: что читаем и что пришло. Полезен и как
+        // доказательство отсутствия записей — здесь фиксируются только Read*-события.
+    private static void Log(string msg)
+    {
+        try
+        {
+            File.AppendAllText(
+                Path.Combine(AppContext.BaseDirectory, "session.log"),
+                $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\n");
+        }
+        catch
+        {
+            // Лог не критичен.
+        }
+    }
+
+    /// <summary>
+    /// Поиск устройства по обоим PID (ресивер и кабель). Только чтение descriptor'ов.
+    /// </summary>
+    public string? FindDevice(out string pid)
+    {
+        foreach (var p in Pids)
+        {
+            string[] endpoints;
+            try
+            {
+                endpoints = HidUsbNative.FindDevices(Vid, p, InterfaceId, DeviceId);
+            }
+            catch (DllNotFoundException)
+            {
+                throw;
+            }
+
+            if (endpoints is { Length: > 0 } && endpoints[0] is { Length: > 0 } ep)
+            {
+                pid = p;
+                return ep;
+            }
+        }
+
+        pid = string.Empty;
+        return null;
+    }
+
+    /// <summary>
+    /// Безопасное подключение: только чтение состояния и флеша.
+    /// Полностью в фоне (вызывать из Task.Run).
+    /// </summary>
+    public async Task<FlashReadResult?> ConnectReadOnlyAsync(CancellationToken ct = default)
+    {
+        SetState(ConnectionState.Connecting);
+
+        return await Task.Run(() =>
+        {
+            string? endpoint = FindDevice(out string pid);
+            if (endpoint == null)
+            {
+                Log("scan: устройство 3554:F53C/F59A не найдено");
+                SetState(ConnectionState.Disconnected);
+                return null;
+            }
+
+            Endpoint = endpoint;
+            ConnectedPid = pid;
+            Log($"scan: найдено pid={pid} ep={endpoint}");
+
+            // Официальная последовательность (FormMain.DeviceConnect), только чтение.
+            if (!HidUsbNative.IsOnLine(endpoint))
+            {
+                // Ресивер есть, но мышь не онлайн — это не ошибка, просто не подключаемся.
+                Log("scan: устройство найдено, но мышь OFFLINE");
+                SetState(ConnectionState.Disconnected);
+                return null;
+            }
+            Log("scan: мышь ONLINE -> Start(только чтение)");
+
+            _flashTcs = new TaskCompletionSource<FlashReadResult>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            _batteryTcs = new TaskCompletionSource<BatteryStatus>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            _versionTcs = new TaskCompletionSource<int>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            HidUsbNative.Start(endpoint, _dataReceived);
+            _started = true;
+
+            // Уведомление драйвера о работе ПО — не запись во флеш (команда статуса).
+            HidUsbNative.CS_UsbServer_SetPCDriverStatus(true);
+
+            // ЕДИНСТВЕННЫЙ запрос данных при старте — только чтение флеша.
+            HidUsbNative.CS_UsbServer_ReadAllFlashData();
+            HidUsbNative.CS_UsbServer_ReadBatteryLevel();
+            HidUsbNative.CS_UsbServer_ReadVersion();
+            HidUsbNative.CS_UsbServer_ReadConfig();     // индекс активного профиля
+
+            using var reg = ct.Register(() =>
+            {
+                _flashTcs.TrySetCanceled(ct);
+                _batteryTcs.TrySetCanceled(ct);
+                _versionTcs.TrySetCanceled(ct);
+            });
+
+            try
+            {
+                // Ждём полный дамп. Батарея/версия могут прийти позже — не блокируем ими.
+                var flashTask = _flashTcs.Task;
+                if (!flashTask.Wait(ReadTimeoutMs, ct))
+                {
+                    SetState(ConnectionState.Error);
+                    return null;
+                }
+
+                var result = flashTask.Result;
+                if (_batteryTcs!.Task is { IsCompletedSuccessfully: true } batTask)
+                    result.Battery = batTask.Result;
+                if (_versionTcs!.Task is { IsCompletedSuccessfully: true } verTask)
+                    result.Version = verTask.Result;
+
+                FlashData = result.Map;
+                SetState(ConnectionState.ConnectedReadOnly);
+                FlashDataUpdated?.Invoke(result.Map);
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                SetState(ConnectionState.Disconnected);
+                return null;
+            }
+            catch (Exception)
+            {
+                SetState(ConnectionState.Error);
+                return null;
+            }
+        }, ct);
+    }
+
+    /// <summary>
+    /// ГЕЙТ ЗАПИСИ. Вызывается ТОЛЬКО по явному нажатию «Применить».
+    /// Путь повторяет официалку: DataParser.Update(gFlashDataMap) ->
+    /// CS_ProtocolDataUpdate(ptr). После записи флеш перечитывается и
+    /// сравнивается побайтово с записанным map.
+    /// </summary>
+    public Task<WriteResult> WriteFlashAsync(FlashDataMap map, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            int size = Marshal.SizeOf<FlashDataMap>();
+            Log($"WRITE: «Применить» -> CS_ProtocolDataUpdate (структура {size} байт)");
+
+            try
+            {
+                IntPtr ptr = Marshal.AllocHGlobal(size);
+                try
+                {
+                    Marshal.StructureToPtr(map, ptr, false);
+                    HidUsbNative.CS_ProtocolDataUpdate(ptr);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(ptr);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"WRITE: исключение {ex.GetType().Name}: {ex.Message}");
+                return new WriteResult { Success = false, Error = ex.Message };
+            }
+
+            // Проверка: перечитываем флеш (до 2 попыток) и сравниваем.
+            for (int attempt = 1; attempt <= 2; attempt++)
+            {
+                try
+                {
+                    _flashTcs = new TaskCompletionSource<FlashReadResult>(
+                        TaskCreationOptions.RunContinuationsAsynchronously);
+                    HidUsbNative.CS_UsbServer_ReadAllFlashData();
+
+                    if (!_flashTcs.Task.Wait(ReadTimeoutMs, ct))
+                    {
+                        Log($"WRITE verify: таймаут чтения (попытка {attempt}/2)");
+                        continue;
+                    }
+
+                    var reread = _flashTcs.Task.Result;
+                    int diff = FlashDataMap.CountDifferingBytes(map, reread.Map);
+                    Log($"WRITE verify: чтение OK, расхождение с записанным: {diff} байт");
+
+                    FlashData = reread.Map;
+                    FlashDataUpdated?.Invoke(reread.Map);
+                    return new WriteResult { Success = true, DiffBytes = diff, VerifiedMap = reread.Map };
+                }
+                catch (Exception ex)
+                {
+                    Log($"WRITE verify: попытка {attempt}: {ex.Message}");
+                }
+            }
+
+            return new WriteResult
+            {
+                Success = false,
+                Error = "Запись выполнена, но перечитать флеш не удалось"
+            };
+        }, ct);
+    }
+
+    /// <summary>
+    /// Смена профиля: команда SetCurrentConfig + перечитывание флеша нового
+    /// профиля (без записи флеша). Повторяет FormMain.customComboBox_Config_OnSelectedIndexChanged.
+    /// </summary>
+    public Task<WriteResult> SwitchProfileAsync(int configIndex, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            Log($"PROFILE: CS_UsbServer_SetCurrentConfig({configIndex}) + перечитывание флеша");
+            try
+            {
+                HidUsbNative.CS_UsbServer_SetCurrentConfig(configIndex);
+            }
+            catch (Exception ex)
+            {
+                Log($"PROFILE: исключение {ex.GetType().Name}: {ex.Message}");
+                return new WriteResult { Success = false, Error = ex.Message };
+            }
+
+            try
+            {
+                _flashTcs = new TaskCompletionSource<FlashReadResult>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                HidUsbNative.CS_UsbServer_ReadAllFlashData();
+
+                if (!_flashTcs.Task.Wait(ReadTimeoutMs, ct))
+                {
+                    Log("PROFILE: таймаут чтения флеша нового профиля");
+                    return new WriteResult { Success = false, Error = "Таймаут чтения профиля" };
+                }
+
+                var reread = _flashTcs.Task.Result;
+                FlashData = reread.Map;
+                FlashDataUpdated?.Invoke(reread.Map);
+                HidUsbNative.CS_UsbServer_ReadConfig(); // подтвердить индекс профиля в устройстве
+                Log($"PROFILE: профиль {configIndex} перечитан");
+                return new WriteResult { Success = true, VerifiedMap = reread.Map };
+            }
+            catch (Exception ex)
+            {
+                Log($"PROFILE: {ex.Message}");
+                return new WriteResult { Success = false, Error = ex.Message };
+            }
+        }, ct);
+    }
+
+    /// <summary>Отслеживание вставки/выдёргивания USB (по образцу официалки, 600 мс).</summary>
+    public void StartUsbWatcher()
+    {
+        try
+        {
+            HidUsbNative.CS_StartUsbChanged(_usbChanged, 600);
+        }
+        catch
+        {
+            // Watcher не критичен для чтения — глушим ошибки.
+        }
+    }
+
+    private void OnUsbChangedEvent(bool plugged)
+    {
+        if (!plugged && _started)
+        {
+            // Мышь выдернули — сбрасываем состояние без записи чего-либо.
+            SetState(ConnectionState.Disconnected);
+        }
+    }
+
+    // ===== Разбор ответов — 1-в-1 по логике FormMain.onUsbDataReceived =====
+
+    private void OnUsbDataReceived(IntPtr pcmd, int cmdLength, IntPtr pdata, int dataLength)
+    {
+        if (cmdLength <= 0)
+            return;
+
+        var cmdBytes = new byte[cmdLength];
+        Marshal.Copy(pcmd, cmdBytes, 0, cmdLength);
+        if (cmdBytes.Length < 6)
+            return;
+
+        var command = new UsbCommand
+        {
+            ReportId = cmdBytes[0],
+            id = cmdBytes[1],
+            CommandStatus = cmdBytes[2],
+            address = (cmdBytes[3] << 8) | cmdBytes[4]
+        };
+
+        byte[]? data = null;
+        if (dataLength > 0)
+        {
+            data = new byte[dataLength];
+            Marshal.Copy(pdata, data, 0, dataLength);
+        }
+        command.receivedData = data;
+
+        if (data == null || data.Length == 0)
+            return;
+
+        var id = (UsbCommandID)command.id;
+
+        // Полный дамп флеша: address==0, ровно 6912 байт.
+        if (command.address == 0 && data.Length == FlashDataLength)
+        {
+            try
+            {
+                var map = HidUsbNative.ParseFlashData(data);
+                Log($"READ flash: {data.Length} байт -> FlashDataMap 10428 (parсинг OK)");
+                var result = new FlashReadResult { Map = map, Battery = default };
+                _flashTcs?.TrySetResult(result);
+            }
+            catch
+            {
+                Log("READ flash: ОШИБКА парсинга");
+                _flashTcs?.TrySetException(new InvalidOperationException("Ошибка парсинга флеша"));
+            }
+            return;
+        }
+
+        switch (id)
+        {
+            case UsbCommandID.BatteryLevel:
+                var bat = HidUsbNative.ParseBatteryStatus(data);
+                Log($"READ battery: level={bat.level} charging={bat.isCharging} voltage={bat.BatVoltage}");
+                _batteryTcs?.TrySetResult(bat);
+                BatteryUpdated?.Invoke(bat);
+                break;
+
+            case UsbCommandID.ReadVersionID:
+                int ver = HidUsbNative.CS_GetDeviceVersion(data);
+                _versionTcs?.TrySetResult(ver);
+                break;
+
+            case UsbCommandID.GetCurrentConfig:
+                // Ответ ReadConfig: data[0] = индекс активного профиля 0..3
+                // (FormMain: ConfigParam[1] сравнивается с SelectIndex комбобокса).
+                if (data.Length >= 1)
+                {
+                    Log($"READ config: активный профиль {data[0]}");
+                    ProfileChanged?.Invoke(data[0]);
+                }
+                break;
+
+            case UsbCommandID.DeviceOnLine:
+                // Смена DPI/частоты приходит как одиночный байт (FormMain: address=0/4, len=1).
+                if (data.Length == 1 && command.address == 4)
+                {
+                    var map = FlashData;
+                    map.mouseConfig.currentDPI = data[0];
+                    FlashData = map;
+                    CurrentDpiChanged?.Invoke(data[0]);
+                }
+                else if (data.Length == 1 && command.address == 0)
+                {
+                    var map = FlashData;
+                    map.mouseConfig.reportRate = data[0];
+                    FlashData = map;
+                    ReportRateChanged?.Invoke(data[0]);
+                }
+                break;
+
+            case UsbCommandID.StatusChanged:
+                var changed = HidUsbNative.ParseStatusChanged(data);
+                StatusChanged?.Invoke(changed);
+                if (changed.isDPILedChanged != 0)
+                    HidUsbNative.CS_UsbServer_ReadDPILed();
+                if (changed.isBatteryLevelChanged != 0)
+                    HidUsbNative.CS_UsbServer_ReadBatteryLevel();
+                break;
+
+            case UsbCommandID.EncryptionData:
+                // DPILed: address=76, 8 байт; LedBar: address=160, 9 байт (FormMain).
+                if (command.address == 76 && data.Length == 8)
+                {
+                    var led = HidUsbNative.ParseDpiLed(data);
+                    var map = FlashData;
+                    map.dpiLed = led;
+                    FlashData = map;
+                    DpiLedUpdated?.Invoke(led);
+                }
+                else if (command.address == 160 && data.Length == 9)
+                {
+                    var bar = HidUsbNative.ParseLedBar(data);
+                    var map = FlashData;
+                    map.ledBar = bar;
+                    FlashData = map;
+                    LedBarUpdated?.Invoke(bar);
+                }
+                break;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+
+        if (_started)
+        {
+            try
+            {
+                // Отключение — не запись: просто закрываем сессию сервера.
+                HidUsbNative.CS_UsbServer_SetPCDriverStatus(false);
+                HidUsbNative.Exit();
+            }
+            catch
+            {
+                // Игнорируем ошибки при завершении.
+            }
+            _started = false;
+        }
+
+        try
+        {
+            HidUsbNative.CS_StopUsbChanged();
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+}
