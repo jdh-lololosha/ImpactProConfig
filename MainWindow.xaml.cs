@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using ImpactProConfig.ViewModels;
 using Wpf.Ui.Controls;
@@ -523,7 +524,44 @@ public partial class MainWindow : FluentWindow
 
     private void RootNavigation_SelectionChanged(object sender, RoutedEventArgs e)
     {
-        // Навигация по TargetPageType выполняется самим NavigationView.
+        Dispatcher.BeginInvoke(new Action(AnimateCurrentPage), DispatcherPriority.Loaded);
+    }
+
+    private void AnimateCurrentPage()
+    {
+        var page = FindPageContent(RootNavigation);
+        if (page == null)
+            return;
+        if (page.RenderTransform is not TranslateTransform)
+            page.RenderTransform = new TranslateTransform();
+        var sb = Application.Current.FindResource("MotionPageEnter") as Storyboard;
+        sb?.Begin(page);
+    }
+
+    private static FrameworkElement? FindPageContent(DependencyObject root)
+    {
+        var frame = FindVisualChild<Frame>(root);
+        if (frame?.Content is FrameworkElement fe)
+            return fe;
+        var cp = FindVisualChild<ContentPresenter>(root);
+        if (cp?.Content is FrameworkElement fe2)
+            return fe2;
+        return null;
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject root) where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T t)
+                return t;
+            var result = FindVisualChild<T>(child);
+            if (result != null)
+                return result;
+        }
+        return null;
     }
 
     private async void Apply_Click(object sender, RoutedEventArgs e)

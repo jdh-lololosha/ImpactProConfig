@@ -42,6 +42,20 @@ public partial class ButtonsPage : Page
             Vm.SelectedButtonIndex = number;
     }
 
+    /// <summary>Наведение на маркер — подсветка строки в списке.</summary>
+    private void Marker_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (Vm != null && sender is Button { Tag: int number })
+            Vm.SelectedButtonIndex = number;
+    }
+
+    /// <summary>Наведение на строку — подсветка маркера на корпусе.</summary>
+    private void Row_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (Vm != null && sender is Border { Tag: int number })
+            Vm.SelectedButtonIndex = number;
+    }
+
     private void Restore_Click(object sender, RoutedEventArgs e) => Vm?.DiscardChanges();
 
     private void Export_Click(object sender, RoutedEventArgs e)

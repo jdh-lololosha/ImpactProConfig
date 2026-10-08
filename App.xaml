@@ -8,6 +8,7 @@
             <ResourceDictionary.MergedDictionaries>
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
+                <ResourceDictionary Source="Styles/Motion.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <!-- ===== Токены дизайна ===== -->
@@ -129,13 +130,68 @@
                                                                  Height="16"
                                                                  Fill="White"
                                                                  Stroke="#00000055"
-                                                                 StrokeThickness="1" />
+                                                                 StrokeThickness="1">
+                                                            <Ellipse.Effect>
+                                                                <DropShadowEffect Color="{DynamicResource ImpactAccentColor}"
+                                                                                  BlurRadius="0"
+                                                                                  ShadowDepth="0"
+                                                                                  Opacity="0" />
+                                                            </Ellipse.Effect>
+                                                        </Ellipse>
                                                     </Grid>
                                                     <ControlTemplate.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter TargetName="ThumbDot" Property="Width" Value="18" />
-                                                            <Setter TargetName="ThumbDot" Property="Height" Value="18" />
-                                                        </Trigger>
+                                                        <EventTrigger RoutedEvent="MouseEnter">
+                                                            <BeginStoryboard>
+                                                                <Storyboard>
+                                                                    <DoubleAnimation Storyboard.TargetName="ThumbDot"
+                                                                                     Storyboard.TargetProperty="Width"
+                                                                                     To="18" Duration="0:0:0.12">
+                                                                        <DoubleAnimation.EasingFunction>
+                                                                            <CubicEase EasingMode="EaseOut" />
+                                                                        </DoubleAnimation.EasingFunction>
+                                                                    </DoubleAnimation>
+                                                                    <DoubleAnimation Storyboard.TargetName="ThumbDot"
+                                                                                     Storyboard.TargetProperty="Height"
+                                                                                     To="18" Duration="0:0:0.12">
+                                                                        <DoubleAnimation.EasingFunction>
+                                                                            <CubicEase EasingMode="EaseOut" />
+                                                                        </DoubleAnimation.EasingFunction>
+                                                                    </DoubleAnimation>
+                                                                    <DoubleAnimation Storyboard.TargetName="ThumbDot"
+                                                                                     Storyboard.TargetProperty="Effect.BlurRadius"
+                                                                                     To="8" Duration="0:0:0.12" />
+                                                                    <DoubleAnimation Storyboard.TargetName="ThumbDot"
+                                                                                     Storyboard.TargetProperty="Effect.Opacity"
+                                                                                     To="0.6" Duration="0:0:0.12" />
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                        <EventTrigger RoutedEvent="MouseLeave">
+                                                            <BeginStoryboard>
+                                                                <Storyboard>
+                                                                    <DoubleAnimation Storyboard.TargetName="ThumbDot"
+                                                                                     Storyboard.TargetProperty="Width"
+                                                                                     To="16" Duration="0:0:0.12">
+                                                                        <DoubleAnimation.EasingFunction>
+                                                                            <CubicEase EasingMode="EaseOut" />
+                                                                        </DoubleAnimation.EasingFunction>
+                                                                    </DoubleAnimation>
+                                                                    <DoubleAnimation Storyboard.TargetName="ThumbDot"
+                                                                                     Storyboard.TargetProperty="Height"
+                                                                                     To="16" Duration="0:0:0.12">
+                                                                        <DoubleAnimation.EasingFunction>
+                                                                            <CubicEase EasingMode="EaseOut" />
+                                                                        </DoubleAnimation.EasingFunction>
+                                                                    </DoubleAnimation>
+                                                                    <DoubleAnimation Storyboard.TargetName="ThumbDot"
+                                                                                     Storyboard.TargetProperty="Effect.BlurRadius"
+                                                                                     To="0" Duration="0:0:0.12" />
+                                                                    <DoubleAnimation Storyboard.TargetName="ThumbDot"
+                                                                                     Storyboard.TargetProperty="Effect.Opacity"
+                                                                                     To="0" Duration="0:0:0.12" />
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
                                                     </ControlTemplate.Triggers>
                                                 </ControlTemplate>
                                             </Thumb.Template>
@@ -212,11 +268,31 @@
                                     CornerRadius="6"
                                     Padding="14,7"
                                     SnapsToDevicePixels="True">
+                                <Border.RenderTransform>
+                                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                                </Border.RenderTransform>
+                                <Border.RenderTransformOrigin>
+                                    <Point X="0.5" Y="0.5" />
+                                </Border.RenderTransformOrigin>
                                 <ContentPresenter HorizontalAlignment="Center"
                                                   VerticalAlignment="Center"
                                                   RecognizesAccessKey="True" />
                             </Border>
                             <ControlTemplate.Triggers>
+                                <EventTrigger RoutedEvent="Click">
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="SegmentBg"
+                                                             Storyboard.TargetProperty="RenderTransform.ScaleX"
+                                                             To="0.98" Duration="0:0:0.08"
+                                                             AutoReverse="True" />
+                                            <DoubleAnimation Storyboard.TargetName="SegmentBg"
+                                                             Storyboard.TargetProperty="RenderTransform.ScaleY"
+                                                             To="0.98" Duration="0:0:0.08"
+                                                             AutoReverse="True" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </EventTrigger>
                                 <Trigger Property="IsChecked" Value="True">
                                     <Setter TargetName="SegmentBg" Property="Background" Value="{DynamicResource ImpactAccentBrush}" />
                                     <Setter TargetName="SegmentBg" Property="BorderBrush" Value="{DynamicResource ImpactAccentBrush}" />
@@ -444,6 +520,60 @@
                                     <Setter TargetName="AccentBar" Property="Opacity" Value="1" />
                                     <Setter Property="Foreground" Value="White" />
                                     <Setter Property="FontWeight" Value="SemiBold" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.4" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- ===================== ToggleSwitch ===================== -->
+            <Style TargetType="{x:Type ui:ToggleSwitch}">
+                <Setter Property="Foreground" Value="{StaticResource ImpactTextBrush}" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ui:ToggleSwitch}">
+                            <Grid Background="Transparent">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border x:Name="SwitchTrack"
+                                        Width="40"
+                                        Height="20"
+                                        CornerRadius="10"
+                                        Background="#3A3A3A"
+                                        BorderBrush="#4A4A4A"
+                                        BorderThickness="1"
+                                        VerticalAlignment="Center">
+                                    <Border x:Name="SwitchKnob"
+                                            Width="14"
+                                            Height="14"
+                                            CornerRadius="7"
+                                            Background="#B0B0B0"
+                                            HorizontalAlignment="Left"
+                                            Margin="3,0,0,0"
+                                            VerticalAlignment="Center" />
+                                </Border>
+                                <ContentPresenter Grid.Column="1"
+                                                  Margin="10,0,0,0"
+                                                  VerticalAlignment="Center"
+                                                  RecognizesAccessKey="True" />
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="SwitchTrack" Property="Background" Value="{DynamicResource ImpactAccentBrush}" />
+                                    <Setter TargetName="SwitchTrack" Property="BorderBrush" Value="{DynamicResource ImpactAccentBrush}" />
+                                    <Setter TargetName="SwitchKnob" Property="Background" Value="White" />
+                                    <Setter TargetName="SwitchKnob" Property="HorizontalAlignment" Value="Right" />
+                                    <Setter TargetName="SwitchKnob" Property="Margin" Value="0,0,3,0" />
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="SwitchTrack" Property="BorderBrush" Value="#6A6A6A" />
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
                                     <Setter Property="Opacity" Value="0.4" />

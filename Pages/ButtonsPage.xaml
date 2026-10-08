@@ -17,13 +17,20 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type Button}">
-                        <Grid>
+                        <Grid RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1" />
+                            </Grid.RenderTransform>
                             <Border x:Name="MarkerBg"
                                     CornerRadius="11"
                                     Background="#991F1F1F"
                                     BorderBrush="#66FFFFFF"
                                     BorderThickness="1.5"
                                     SnapsToDevicePixels="True">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="{DynamicResource ImpactAccentColor}"
+                                                      BlurRadius="0" ShadowDepth="0" Opacity="0" />
+                                </Border.Effect>
                                 <ContentPresenter HorizontalAlignment="Center"
                                                   VerticalAlignment="Center" />
                             </Border>
@@ -49,6 +56,54 @@
                             </Path>
                         </Grid>
                         <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="MouseEnter">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX"
+                                                         To="1.15" Duration="0:0:0.12">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY"
+                                                         To="1.15" Duration="0:0:0.12">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="MarkerBg"
+                                                         Storyboard.TargetProperty="Effect.BlurRadius"
+                                                         To="12" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="MarkerBg"
+                                                         Storyboard.TargetProperty="Effect.Opacity"
+                                                         To="0.8" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <EventTrigger RoutedEvent="MouseLeave">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX"
+                                                         To="1" Duration="0:0:0.12">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY"
+                                                         To="1" Duration="0:0:0.12">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="MarkerBg"
+                                                         Storyboard.TargetProperty="Effect.BlurRadius"
+                                                         To="0" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="MarkerBg"
+                                                         Storyboard.TargetProperty="Effect.Opacity"
+                                                         To="0" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="MarkerBg" Property="Background" Value="{DynamicResource ImpactAccentBrush}" />
                             </Trigger>
@@ -87,6 +142,13 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!-- Дыхание неонового подиума: Opacity 0.6→1.0, период 3.5с -->
+        <Storyboard x:Key="PodiumBreathing">
+            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                             From="0.6" To="1.0" Duration="0:0:1.75"
+                             AutoReverse="True" RepeatBehavior="Forever"/>
+        </Storyboard>
     </Page.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -120,10 +182,17 @@
                                  HorizontalAlignment="Center"
                                  VerticalAlignment="Bottom"
                                  Margin="0,0,0,4">
-                            <!-- Подиум перекрашивается под выбранную тему. -->
                             <Ellipse.Fill>
-                                <Binding Path="AccentGlowBrush" />
+                                <RadialGradientBrush>
+                                    <GradientStop Color="{Binding AccentGlowBrush.Color}" Offset="0" />
+                                    <GradientStop Color="Transparent" Offset="1" />
+                                </RadialGradientBrush>
                             </Ellipse.Fill>
+                            <Ellipse.Triggers>
+                                <EventTrigger RoutedEvent="Loaded">
+                                    <BeginStoryboard Storyboard="{StaticResource PodiumBreathing}" />
+                                </EventTrigger>
+                            </Ellipse.Triggers>
                         </Ellipse>
 
                         <!-- Образ корпуса выбирается в Настройках; здесь он просто отображается. -->
@@ -149,6 +218,7 @@
                                 <DataTemplate>
                                     <Button Style="{StaticResource MarkerButton}"
                                             Click="Marker_Click"
+                                            MouseEnter="Marker_MouseEnter"
                                             Tag="{Binding MarkerNumber}"
                                             ToolTip="{Binding DisplayName}">
                                         <TextBlock Text="{Binding MarkerNumber}" />
@@ -250,6 +320,7 @@
                             <DataTemplate>
                                 <Border Style="{StaticResource ButtonRow}"
                                         MouseLeftButtonUp="Row_Click"
+                                        MouseEnter="Row_MouseEnter"
                                         Tag="{Binding MarkerNumber}"
                                         Cursor="Hand">
                                     <Grid>

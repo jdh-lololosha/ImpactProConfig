@@ -71,23 +71,16 @@ internal sealed class OsdWindow : Window
 
         Loaded += (_, _) =>
         {
-            var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220))
+            var enterStoryboard = Application.Current.FindResource("MotionOsdEnter") as Storyboard;
+            enterStoryboard?.Begin((FrameworkElement)Content);
+            _holdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250 + _durationMs) };
+            _holdTimer.Tick += (_, _) =>
             {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-            };
-            fadeIn.Completed += (_, _) =>
-            {
-                if (_closing)
-                    return;
-                _holdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(_durationMs) };
-                _holdTimer.Tick += (_, _) =>
-                {
-                    _holdTimer.Stop();
+                _holdTimer.Stop();
+                if (!_closing)
                     FadeOut();
-                };
-                _holdTimer.Start();
             };
-            BeginAnimation(OpacityProperty, fadeIn);
+            _holdTimer.Start();
         };
     }
 
@@ -136,12 +129,26 @@ internal sealed class OsdWindow : Window
         if (_closing)
             return;
         _closing = true;
-        var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(300))
+        _holdTimer?.Stop();
+        try
         {
-            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+            var exitStoryboard = Application.Current.FindResource("MotionOsdExit") as Storyboard;
+            exitStoryboard?.Begin((FrameworkElement)Content);
+        }
+        catch
+        {
+            // Ресурс недоступен — просто закрываемся позже по таймеру.
+        }
+
+        // Закрытие по таймеру, а не по Completed: ресурсный Storyboard
+        // не гарантирует Completed (часы могут не завершиться) — окно зависало.
+        var closeTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(200),  // Exit-анимация 150 мс + запас
         };
-        fadeOut.Completed += (_, _) =>
+        closeTimer.Tick += (_, _) =>
         {
+            closeTimer.Stop();
             try
             {
                 Close();
@@ -151,7 +158,7 @@ internal sealed class OsdWindow : Window
                 // Уже закрыт.
             }
         };
-        BeginAnimation(OpacityProperty, fadeOut);
+        closeTimer.Start();
     }
 
     private void ForceClose()
@@ -160,7 +167,6 @@ internal sealed class OsdWindow : Window
         _holdTimer?.Stop();
         try
         {
-            BeginAnimation(OpacityProperty, null);
             Close();
         }
         catch
@@ -232,11 +238,11 @@ internal sealed class OsdWindow : Window
             });
         }
 
-        return new Border
+        var border = new Border
         {
             CornerRadius = new CornerRadius(14),
             Background = new SolidColorBrush(Color.FromArgb(0xE8, 0x1C, 0x1C, 0x1F)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x50, 0xE8, 0x11, 0x23)),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(18, 14, 18, 14),
             MinWidth = 240,
@@ -244,10 +250,12 @@ internal sealed class OsdWindow : Window
             {
                 BlurRadius = 28,
                 ShadowDepth = 6,
-                Opacity = 0.6,
-                Color = Colors.Black,
+                Opacity = 0.5,
+                Color = Color.FromArgb(0xFF, 0xE8, 0x11, 0x23),
             },
             Child = panel,
         };
+        border.RenderTransform = new TranslateTransform();
+        return border;
     }
 }

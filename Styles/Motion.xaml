@@ -1,0 +1,40 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ===== Easing Functions ===== -->
+    <CubicEase x:Key="MotionEaseOutCubic" EasingMode="EaseOut"/>
+    <QuarticEase x:Key="MotionEaseOutQuartic" EasingMode="EaseOut"/>
+    <BackEase x:Key="MotionBackEaseOut" EasingMode="EaseOut" Amplitude="0.25"/>
+    <ExponentialEase x:Key="MotionEaseInExpo" EasingMode="EaseIn"/>
+
+    <!-- ===== OSD Enter: slide from bottom 30px + fade in, 250ms BackEase ===== -->
+    <Storyboard x:Key="MotionOsdEnter">
+        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                         From="0" To="1" Duration="0:0:0.25"
+                         EasingFunction="{StaticResource MotionBackEaseOut}"/>
+        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                         From="30" To="0" Duration="0:0:0.25"
+                         EasingFunction="{StaticResource MotionBackEaseOut}"/>
+    </Storyboard>
+
+    <!-- ===== OSD Exit: fade out + 10px down, 150ms ExponentialEase ===== -->
+    <Storyboard x:Key="MotionOsdExit">
+        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                         From="1" To="0" Duration="0:0:0.15"
+                         EasingFunction="{StaticResource MotionEaseInExpo}"/>
+        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                         From="0" To="10" Duration="0:0:0.15"
+                         EasingFunction="{StaticResource MotionEaseInExpo}"/>
+    </Storyboard>
+
+    <!-- ===== Page Enter: Y 16→0 + fade in, 200ms CubicEase ===== -->
+    <Storyboard x:Key="MotionPageEnter">
+        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                         From="0" To="1" Duration="0:0:0.2"
+                         EasingFunction="{StaticResource MotionEaseOutCubic}"/>
+        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                         From="16" To="0" Duration="0:0:0.2"
+                         EasingFunction="{StaticResource MotionEaseOutCubic}"/>
+    </Storyboard>
+
+</ResourceDictionary>
