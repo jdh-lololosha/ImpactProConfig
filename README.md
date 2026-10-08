@@ -42,7 +42,7 @@ The vendor treats `dev1` / `dev2` / `dev3` as **Config.ini slots, not colours**.
 
 ### Installation
 
-Download **ImpactProConfig-v1.1.5-Portable.zip** from the [Releases](../../releases) page and extract it anywhere (a folder of your choice — no admin rights, nothing is written to `Program Files` or the registry). Run `ImpactProConfig.exe`.
+Download **ImpactProConfig-v1.2.0-Portable.zip** from the [Releases](../../releases) page and extract it anywhere (a folder of your choice — no admin rights, nothing is written to `Program Files` or the registry). Run `ImpactProConfig.exe`.
 
 `hidusb.dll` (the protocol transport library) ships next to the executable — keep them together, the application will not work without it. The in-app updater replaces the files in that folder automatically.
 
@@ -51,7 +51,11 @@ Download **ImpactProConfig-v1.1.5-Portable.zip** from the [Releases](../../relea
 ```powershell
 git clone https://github.com/jdh-lololosha/ImpactProConfig.git
 cd ImpactProConfig
-dotnet build -c Release
+
+# Portable release: self-contained publish (the flag lives in the csproj),
+# then pack it into ImpactProConfig-v<Version>-Portable.zip
+dotnet publish -c Release -r win-x64 -o publish
+.\build-portable.ps1
 ```
 
 ### Disclaimer
@@ -98,7 +102,7 @@ This is third-party software. It communicates with the mouse through the same HI
 
 ### Установка
 
-Скачайте **ImpactProConfig-v1.1.5-Portable.zip** со страницы [Releases](../../releases) и распакуйте в любую папку (на ваш выбор — права админа не нужны, ничего не пишется в `Program Files` и реестр). Запустите `ImpactProConfig.exe`.
+Скачайте **ImpactProConfig-v1.2.0-Portable.zip** со страницы [Releases](../../releases) и распакуйте в любую папку (на ваш выбор — права админа не нужны, ничего не пишется в `Program Files` и реестр). Запустите `ImpactProConfig.exe`.
 
 `hidusb.dll` (библиотека протокола) лежит рядом с exe — не разделяйте их, без неё приложение работать не будет. Встроенное обновление само заменит файлы в этой папке.
 
@@ -107,7 +111,11 @@ This is third-party software. It communicates with the mouse through the same HI
 ```powershell
 git clone https://github.com/jdh-lololosha/ImpactProConfig.git
 cd ImpactProConfig
-dotnet build -c Release
+
+# Портативный релиз: publish в self-contained (флаг задан в csproj),
+# затем паковка в ImpactProConfig-v<Version>-Portable.zip
+dotnet publish -c Release -r win-x64 -o publish
+.\build-portable.ps1
 ```
 
 ### Отказ от ответственности
