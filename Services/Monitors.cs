@@ -53,6 +53,101 @@ internal static class Monitors
     private const uint MonitorinfofPrimary = 1;
     private const uint MdtEffectiveDpi = 0;
 
+    /// <summary>LOGPIXELSX для GetDeviceCaps.</summary>
+    private const int LogPixelsX = 88;
+
+    /// <summary>LOGPIXELSY для GetDeviceCaps.</summary>
+    private const int LogPixelsY = 90;
+
+    // SM_*VIRTUALSCREEN — аварийный путь, если EnumDisplayMonitors не сработал.
+    private const int SM_XVIRTUALSCREEN = 76;
+    private const int SM_YVIRTUALSCREEN = 77;
+    private const int SM_CXVIRTUALSCREEN = 78;
+    private const int SM_CYVIRTUALSCREEN = 79;
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetDC(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+    [DllImport("gdi32.dll")]
+    private static extern int GetDeviceCaps(IntPtr hdc, int nIndex);
+
+    /// <summary>
+    /// Есть ли Shcore.dll (Win8.1+). Проверяется один раз: DllNotFoundException на
+    /// каждом мониторе ронял бы перечисление целиком.
+    /// </summary>
+    private static readonly bool ShcoreAvailable = ProbeShcore();
+
+    private static bool ProbeShcore()
+    {
+        try
+        {
+            IntPtr h = NativeLibrary.TryLoad("Shcore.dll", out IntPtr mod) ? mod : IntPtr.Zero;
+            if (h == IntPtr.Zero)
+                return false;
+            NativeLibrary.Free(h);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// DPI монитора. Основной путь — Shcore!GetDpiForMonitor (Win8.1+).
+    /// Если Shcore недоступна (Win7/8.0) — GetDC + GetDeviceCaps(LOGPIXELSX/Y),
+    /// а если и это не даёт значения — базовые 96. Монитор из списка при любом
+    /// сбое НЕ выбрасывается: без него OSD некуда позиционировать вообще.
+    /// </summary>
+    private static (double X, double Y) GetDpi(IntPtr hMonitor, IntPtr hdc)
+    {
+        if (ShcoreAvailable)
+        {
+            try
+            {
+                if (GetDpiForMonitor(hMonitor, MdtEffectiveDpi, out uint dx, out uint dy) == 0
+                    && dx > 0)
+                    return (dx, dy);
+            }
+            catch
+            {
+                // Падаем на GDI-путь ниже.
+            }
+        }
+
+        try
+        {
+            // hdc из EnumDisplayMonitors валиден для текущего монитора; если
+            // он нулевой (редко) — берём DC всего экрана.
+            IntPtr dc = hdc != IntPtr.Zero ? hdc : GetDC(IntPtr.Zero);
+            bool ownDc = hdc == IntPtr.Zero;
+            try
+            {
+                int x = GetDeviceCaps(dc, LogPixelsX);
+                int y = GetDeviceCaps(dc, LogPixelsY);
+                if (x > 0 && y > 0)
+                    return (x, y);
+            }
+            finally
+            {
+                if (ownDc)
+                    ReleaseDC(IntPtr.Zero, dc);
+            }
+        }
+        catch
+        {
+            // GDI тоже недоступна — базовое значение ниже.
+        }
+
+        return (96, 96);
+    }
+
     public static IReadOnlyList<MonitorInfo> All()
     {
         var result = new List<MonitorInfo>();
@@ -67,12 +162,9 @@ internal static class Monitors
                     if (!GetMonitorInfoW(hMon, ref mi))
                         return true;
 
-                    double dpiX = 96, dpiY = 96;
-                    if (GetDpiForMonitor(hMon, MdtEffectiveDpi, out uint dx, out uint dy) == 0 && dx > 0)
-                    {
-                        dpiX = dx;
-                        dpiY = dy;
-                    }
+                    // hdc из EnumDisplayMonitors принадлежит текущему монитору —
+                    // он же используется как GDI-fallback для DPI.
+                    var dpi = GetDpi(hMon, hdc);
 
                     bool primary = (mi.dwFlags & MonitorinfofPrimary) != 0;
                     result.Add(new MonitorInfo(
@@ -86,8 +178,8 @@ internal static class Monitors
                         mi.rcWork.Top,
                         mi.rcWork.Right - mi.rcWork.Left,
                         mi.rcWork.Bottom - mi.rcWork.Top,
-                        dpiX,
-                        dpiY));
+                        dpi.X,
+                        dpi.Y));
                 }
                 catch
                 {
@@ -99,8 +191,15 @@ internal static class Monitors
         }
         catch
         {
-            // EnumDisplayMonitors недоступен — вернём пустой список.
+            // EnumDisplayMonitors недоступен — ниже подставим виртуальный экран.
         }
+
+        // Страховка: OSD некуда позиционировать, если перечисление не дало
+        // ничего (сбой API, необычная конфигурация). Пустой список тут означал
+        // бы, что оверлей не показывается вообще, поэтому отдаём виртуальный
+        // экран — координаты берём из GetSystemMetrics, DPI базовые.
+        if (result.Count == 0)
+            result.Add(VirtualScreenFallback());
 
         // Честная нумерация: основной всегда «Монитор 1», далее — слева направо.
         result = result
@@ -115,5 +214,26 @@ internal static class Monitors
             result[i] = m with { Name = $"{label} [{m.Width}x{m.Height}]" };
         }
         return result;
+    }
+
+    /// <summary>Единственный «монитор» = весь виртуальный экран. Аварийный вариант.</summary>
+    private static MonitorInfo VirtualScreenFallback()
+    {
+        int x = 0, y = 0, w = 1920, h = 1080;
+        try
+        {
+            x = GetSystemMetrics(SM_XVIRTUALSCREEN);
+            y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+            w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+            h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        }
+        catch
+        {
+            // Значения выше — разумный минимум, если даже это недоступно.
+        }
+        if (w <= 0) w = 1920;
+        if (h <= 0) h = 1080;
+
+        return new MonitorInfo("", true, x, y, w, h, x, y, w, h, 96, 96);
     }
 }

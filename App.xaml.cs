@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -77,7 +78,6 @@ public partial class App : Application
                 break;
         }
 
-        Log($"ComboPreview: src={e.OriginalSource?.GetType().Name} inDropDown={inDropDown} open={cb.IsDropDownOpen}");
         if (inDropDown)
             return;
 
@@ -115,9 +115,41 @@ public partial class App : Application
         Log("Startup OK");
     }
 
+    /// <summary>
+    /// Последняя линия обороны UI. Раньше здесь стояло безусловное
+    /// e.Handled = true на любое исключение: падение молча проглатывалось,
+    /// пользователь видел «ничего не произошло», а интерфейс оставался
+    /// наполовину обновлённым.
+    ///
+    /// Теперь: сначала пишем в crash.log (исключение уже не потерять), потом
+    /// подавляем только то, что действительно безопасно подавить. Наружу
+    /// пропускаем всё, что похоже на дефект логики (NRE, IndexOutOfRange,
+    /// ArgumentOutOfRange, InvalidCast) — для них приложение надо перезапустить,
+    /// а не продолжать работу в неизвестном состоянии.
+    /// </summary>
     private void OnDispatcherException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         Log($"Dispatcher: {e.Exception}");
-        e.Handled = true;
+
+        if (IsRecoverable(e.Exception))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // Не подавляем: WPF сам покажет ошибку и завершит приложение.
+        // Пользователь увидит причину, а лог укажет на последний шаг.
     }
+
+    /// <summary>
+    /// Ошибки данных/окружения, от которых UI может оправиться без перезапуска.
+    /// Логика (NullReference и т.п.) сюда НЕ относится намеренно.
+    /// </summary>
+    private static bool IsRecoverable(Exception ex) => ex switch
+    {
+        COMException => true,                       // COM-обёртки hidusb / OLE
+        IOException => true,                        // файлы настроек, лог
+        UnauthorizedAccessException => true,
+        _ => false,
+    };
 }

@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-
 namespace ImpactProConfig.Driver;
 
 // Протокольные типы 1-в-1 из декомпилированного DriverLib официалки.

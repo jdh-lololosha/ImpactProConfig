@@ -18,7 +18,8 @@ namespace ImpactProConfig.ViewModels;
 ///  - поле _loading подавляет запись изменений во время загрузки UI из map.
 ///
 /// Все USB-вызовы — в фоне (Task.Run), UI не блокируется. Запись во флеш
-/// выполняется ТОЛЬКО в ApplyAsync (см. DeviceSession.WriteFlashAsync).
+/// выполняется ТОЛЬКО в ApplyAsync (см. DeviceSession.WriteFlashAsync):
+/// путь общий для ручного «Применить» и автоприменения по таймеру.
 /// </summary>
 /// <summary>Пятно акцентного цвета в палитре на странице настроек.</summary>
 /// <param name="Index">Индекс пресета — его кладём в Tag и шлём в обработчик клика.</param>
@@ -35,6 +36,21 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private FlashDataMap _working;
     private bool _loading;              // перезагрузка UI из map — не помечаем «изменено»
     private bool _dirty;
+
+    // ===== Автоприменение =====
+    // Debounce: любое изменение рестартует отсчёт; по нулю — запись сама.
+    private const int AutoApplyDelaySeconds = 2;
+    private readonly System.Windows.Threading.DispatcherTimer _autoApplyTimer;
+    private int _autoApplySecondsLeft;
+    private bool _autoApplyPending;
+
+    /// <summary>true после Dispose: отменённые колбэки сессии становятся no-op.</summary>
+    private bool _disposed;
+
+    // Откат ПРИМЕНЁННОГО: снимок состояния мыши ДО последней записи.
+    // Один уровень undo: новый Apply перезаписывает снимок.
+    private FlashDataMap _undoMap;
+    private bool _hasUndo;
     private int _deviceProfileIndex = -1;
     private bool _suspendProfileHandler;
 
@@ -135,16 +151,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ImageSource MouseImage
     {
         get => _mouseImage;
-        private set
-        {
-            if (Set(ref _mouseImage, value))
-                OnPropertyChanged(nameof(MouseImageSize));
-        }
+        private set => Set(ref _mouseImage, value);
     }
-
-    /// <summary>Размер полотна образа — на нём заморожены координаты маркеров.</summary>
-    public string MouseImageSize =>
-        _mouseImage is not null ? $"{_mouseImage.Width:0}×{_mouseImage.Height:0}" : "—";
 
     /// <summary>Отображаемый вариант корпуса (может отличаться от выбранного при «Авто»).</summary>
     public string MouseSkinName
@@ -242,6 +250,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public MainViewModel()
     {
+        // Массивы FlashDataMap (dpiConfig/keys/shortCutKey/macroKey) у дефолтного
+        // struct равны null до первого чтения флеша. Любая правка до подключения
+        // устройства (DPI-слот, назначение действия) разыменовывала бы их и давала
+        // NullReferenceException, поэтому инициализируем пустой картой сразу.
+        _baseline = FlashDataMap.CreateEmpty();
+        _working = FlashDataMap.CreateEmpty();
+
         for (int i = 0; i < _dpiSlots.Length; i++)
         {
             int idx = i;
@@ -302,6 +317,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         // Локальные настройки ПК: низкий заряд, OSD, маска OSD-слотов.
         _local = LocalSettingsStore.Load();
         _lowBatteryAlertEnabled = _local.LowBatteryAlertEnabled;
+
+        // Автоприменение: debounce-таймер, живёт на UI-потоке.
+        _autoApplyTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _autoApplyTimer.Tick += AutoApplyTick;
         _lowBatteryNotified = _local.LowBatteryNotified;
         _osdSlotsMask = _local.OsdSlotsMask;
         _osdPositionIndex = Math.Clamp(_local.OsdPositionIndex, 0, OsdPositionOptions.Length - 1);
@@ -387,6 +409,23 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>«Применить» доступно только при подключении и наличии изменений.</summary>
     public bool CanApply => IsConnected && HasUnsavedChanges && !IsBusy;
 
+    /// <summary>Идёт отсчёт до автоприменения (показываем кнопку «Отменить»).</summary>
+    public bool IsAutoApplyPending
+    {
+        get => _autoApplyPending;
+        private set
+        {
+            if (Set(ref _autoApplyPending, value))
+                RaiseCanCancel();
+        }
+    }
+
+    /// <summary>Текст отсчёта: «Автоприменение через N с…».</summary>
+    public string AutoApplyCountdownText => $"Автоприменение через {_autoApplySecondsLeft} с…";
+
+    /// <summary>«Отменить» активна: идёт отсчёт (откат локально) или есть что откатить после записи.</summary>
+    public bool CanCancel => IsAutoApplyPending || _hasUndo;
+
     /// <summary>Смена профиля блокируется при несохранённых изменениях.</summary>
     public bool CanSwitchProfile => IsConnected && !HasUnsavedChanges && !IsBusy;
 
@@ -435,9 +474,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _ => "Подключено"
     };
 
-    /// <summary>Максимальная частота опроса для текущего подключения.</summary>
-    public REPORT_RATE MaxReportRate => _session.MaxReportRate;
-
     /// <summary>Доступна ли частота выше 1000 Гц (только на проводе).</summary>
     public bool HighRatesAllowed => _session.IsCable;
 
@@ -452,9 +488,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>Сколько точек уже накоплено — видно, что статистика не пустая.</summary>
     public string BatteryStatsSamplesText => $"{_batteryStats.SampleCount} замеров";
-
-    /// <summary>Хватает ли истории для честной оценки.</summary>
-    public bool HasBatteryStats => _batteryStats.HasEnoughData;
 
     // ===== Проверка обновлений =====
 
@@ -1018,8 +1051,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             });
             DongleVersionText = text;
         }
-        catch
+        catch (Exception ex)
         {
+            // Раньше пустой catch: сбой hidusb при чтении версии донгла был
+            // неотличим от «просто нет версии». В лог — тип и текст.
+            App.Log($"DongleVersion: {ex.GetType().Name}: {ex.Message}");
             DongleVersionText = "—";
         }
     }
@@ -1029,6 +1065,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private void OnSessionStateChanged(ConnectionState state) => RunOnUi(() =>
     {
         IsConnected = state == ConnectionState.ConnectedReadOnly;
+        if (!IsConnected)
+            StopAutoApply();   // отсчёт в никуда: «Применить» всё равно недоступно
         if (state == ConnectionState.Disconnected)
             StatusText = "Мышь отключена.";
         else if (state == ConnectionState.Connecting)
@@ -1045,7 +1083,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(IsWireless));
         OnPropertyChanged(nameof(IsWired));
         OnPropertyChanged(nameof(HighRatesAllowed));
-        OnPropertyChanged(nameof(MaxReportRate));
 
         // На ресивере зарядки нет: убираем ⚡ сразу, не дожидаясь свежего
         // battery-push (иначе индикатор залипает от прошлой сессии на проводе).
@@ -1130,29 +1167,52 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _working = FlashDataMap.Clone(map);
         ReloadUiFromWorking();
         HasUnsavedChanges = false;
+        StopAutoApply();   // состояние авторитетно — отсчёт бессмыслен
+        // Снимок от другой записи/профиля откатывать нельзя.
+        // (После УДАЧНОГО Apply этот же поток вернёт _hasUndo в ApplyAsync.)
+        _hasUndo = false;
+        RaiseCanCancel();
     });
 
     private void OnBatteryUpdated(BatteryStatus bat) => RunOnUi(() => ApplyBattery(bat));
 
+    /// <summary>
+    /// Пуши с физических кнопок мыши (частота опроса, индикатор DPI) НЕ должны
+    /// затирать неприменённые правки пользователя: HasUnsavedChanges == true означает,
+    /// что в _working лежит работа, которой ещё нет на устройстве. Раньше оба
+    /// обработчика перезаписывали и _baseline, и _working, после чего авто-применение
+    /// через 2 с записывало обратно значение, только что заданное кнопкой мыши.
+    /// Теперь при наличии правок синхронизируем только отображение и ждём
+    /// следующего полного чтения флеша (OnFlashDataUpdated).
+    /// </summary>
     private void OnReportRateChanged(byte rate) => RunOnUi(() =>
     {
-        _baseline.mouseConfig.reportRate = rate;
-        _working.mouseConfig.reportRate = rate;
+        if (!HasUnsavedChanges)
+        {
+            _baseline.mouseConfig.reportRate = rate;
+            _working.mouseConfig.reportRate = rate;
+        }
         LoadRateUi(rate);
     });
 
     private void OnCurrentDpiChanged(byte idx) => RunOnUi(() =>
     {
-        _baseline.mouseConfig.currentDPI = idx;
-        _working.mouseConfig.currentDPI = idx;
+        if (!HasUnsavedChanges)
+        {
+            _baseline.mouseConfig.currentDPI = idx;
+            _working.mouseConfig.currentDPI = idx;
+        }
         for (int i = 0; i < _dpiSlots.Length; i++)
             _dpiSlots[i].IsActiveByDevice = i == idx;
     });
 
     private void OnDpiLedUpdated(DPILed led) => RunOnUi(() =>
     {
-        _baseline.dpiLed = led;
-        _working.dpiLed = led;
+        if (!HasUnsavedChanges)
+        {
+            _baseline.dpiLed = led;
+            _working.dpiLed = led;
+        }
         LoadLedUi();
     });
 
@@ -1192,7 +1252,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(BatteryDrainText));
         OnPropertyChanged(nameof(BatteryHoursLeftText));
         OnPropertyChanged(nameof(BatteryStatsSamplesText));
-        OnPropertyChanged(nameof(HasBatteryStats));
     }
 
     private static readonly Brush GreenBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xC7, 0x11));
@@ -1292,7 +1351,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         for (int i = 0; i < _buttonSlots.Length; i++)
         {
             int dev = _buttonSlots[i].DeviceSlot;
-            if ((_osdSlotsMask & (1 << i)) == 0 || dev == 5)
+            // Бит маски хранится по DeviceSlot: так он пишется (1 << devSlot)
+            // и так же читается в ReloadUiFromWorking (>> slot.DeviceSlot).
+            // Индекс массива i и DeviceSlot совпадают не всегда — markerDefs
+            // мапит индекс 3 -> слот 4 («Вперёд») и индекс 4 -> слот 3 («Назад»),
+            // поэтому проверка по (1 << i) меняла эти две кнопки местами.
+            if ((_osdSlotsMask & (1 << dev)) == 0 || dev == 5)
                 continue;   // слот 5 (DPI): физическая кнопка OS-событий не шлёт
             if (NativeMouseKey(dev) == mouseKeyMask)
                 return true;
@@ -1559,7 +1623,98 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_loading)
             return;
         HasUnsavedChanges = true;
+        RestartAutoApply();
     }
+
+    // ===== Автоприменение =====
+
+    /// <summary>Рестарт debounce: любое изменение сдвигает запись на 7 с вперёд.</summary>
+    private void RestartAutoApply()
+    {
+        if (!IsConnected)
+            return;
+        _autoApplySecondsLeft = AutoApplyDelaySeconds;
+        IsAutoApplyPending = true;
+        OnPropertyChanged(nameof(AutoApplyCountdownText));
+        _autoApplyTimer.Stop();
+        _autoApplyTimer.Start();
+    }
+
+    private void AutoApplyTick(object? sender, EventArgs e)
+    {
+        _autoApplySecondsLeft--;
+        OnPropertyChanged(nameof(AutoApplyCountdownText));
+
+        if (_autoApplySecondsLeft > 0)
+            return;
+
+        _autoApplyTimer.Stop();
+        IsAutoApplyPending = false;
+
+        // Пока шёл отсчёт, состояние могло устареть (отключение, запись вручную).
+        if (CanApply)
+            _ = ApplyAsync();
+    }
+
+    /// <summary>
+    /// Кнопка «Отменить»: откат ПРИМЕНЁННЫХ изменений — снимок состояния мыши
+    /// до последней записи пишется обратно. Если идёт отсчёт (ещё не применилось),
+    /// сначала сбрасывается локально.
+    /// </summary>
+    public void CancelAutoApply()
+    {
+        StopAutoApply();
+        if (_dirty)
+        {
+            // Ещё не записано — достаточно отката локальной копии.
+            DiscardChanges();
+            StatusText = "Изменения отменены — запись в мышь не выполнялась.";
+            return;
+        }
+        if (!_hasUndo || IsBusy)
+            return;
+        _ = CancelAppliedAsync();
+    }
+
+    /// <summary>Запись снимка до последнего применения обратно во флеш.</summary>
+    private async Task CancelAppliedAsync()
+    {
+        IsBusy = true;
+        StatusText = "Откат последних изменений…";
+        try
+        {
+            var result = await _session.WriteFlashAsync(_undoMap);
+            if (result.Success)
+            {
+                _hasUndo = false;
+                RaiseCanCancel();
+                StatusText = result.DiffBytes == 0
+                    ? "✓ Применённые изменения откачены."
+                    : $"✓ Откат выполнен, но проверка нашла {result.DiffBytes} байт отличий (см. session.log).";
+            }
+            else
+            {
+                StatusText = $"Ошибка отката: {result.Error}";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Ошибка отката: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>Остановить отсчёт без сообщения (ручное «Применить», откат, переключение профиля).</summary>
+    private void StopAutoApply()
+    {
+        _autoApplyTimer.Stop();
+        IsAutoApplyPending = false;
+    }
+
+    private void RaiseCanCancel() => OnPropertyChanged(nameof(CanCancel));
 
     #endregion
 
@@ -1571,6 +1726,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (!CanApply)
             return;
 
+        StopAutoApply();
+        // Снимок ДО записи: состояние мыши, к которому вернёт «Отменить».
+        _undoMap = FlashDataMap.Clone(_baseline);
+        bool canUndo = _baseline.dpiConfig != null;
+
         IsBusy = true;
         StatusText = "Запись настроек в мышь…";
         try
@@ -1579,6 +1739,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (result.Success)
             {
                 HasUnsavedChanges = false;
+                // Откатывать можно только удачно записанное.
+                _hasUndo = canUndo;
+                RaiseCanCancel();
                 StatusText = result.DiffBytes == 0
                     ? "✓ Настройки записаны и подтверждены."
                     : $"✓ Записано, но проверка нашла {result.DiffBytes} байт отличий (см. session.log).";
@@ -1603,6 +1766,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (IsBusy || _baseline.dpiConfig == null)
             return;
+        StopAutoApply();
         _working = FlashDataMap.Clone(_baseline);
         ReloadUiFromWorking();
         HasUnsavedChanges = false;
@@ -1723,13 +1887,26 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _ => value % 30 == 0 && value / 30 + 1 is >= 2 and <= 8 ? value / 30 + 1 : 5
     };
 
-    private static void RunOnUi(Action action)
+    /// <summary>
+    /// Постановка действия в UI-поток. Метод экземпляра (а не static), потому что
+    /// после Dispose уже поставленные в очередь колбэки должны превратиться в no-op.
+    /// </summary>
+    private void RunOnUi(Action action)
     {
+        if (_disposed)
+            return;
         var app = System.Windows.Application.Current;
-        if (app?.Dispatcher is { HasShutdownStarted: false, HasShutdownFinished: false } disp && !disp.CheckAccess())
-            disp.BeginInvoke(action);
-        else
+        if (app?.Dispatcher is not { HasShutdownStarted: false, HasShutdownFinished: false } disp)
+            return;   // Приложение закрывается — трогать UI нельзя.
+        if (disp.CheckAccess())
+        {
             action();
+            return;
+        }
+        // Dispatcher уже в shutdown — BeginInvoke бросит, а молчаливый return
+        // оставит состояние неприменённым, но без падения.
+        if (!disp.HasShutdownStarted && !disp.HasShutdownFinished)
+            disp.BeginInvoke(action);
     }
 
     private void RaiseCommandStates()
@@ -1751,8 +1928,31 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
+    /// <summary>
+    /// Освобождение: таймер останавливается и отписывается, все восемь событий
+    /// сессии снимаются. Раньше Dispose только Stop()'ил таймер и Dispose()'ил
+    /// сессию, а подписки оставались — DeviceSession держит ссылки на обработчики,
+    /// значит и этот объект не отпускался. Плюс флаг _disposed: колбэки,
+    /// уже поставленные в очередь RunOnUi, после Dispose превращаются в no-op.
+    /// </summary>
     public void Dispose()
     {
+        if (_disposed)
+            return;
+        _disposed = true;
+
+        _autoApplyTimer.Stop();
+        _autoApplyTimer.Tick -= AutoApplyTick;
+
+        _session.StateChanged -= OnSessionStateChanged;
+        _session.FlashDataUpdated -= OnFlashDataUpdated;
+        _session.BatteryUpdated -= OnBatteryUpdated;
+        _session.ReportRateChanged -= OnReportRateChanged;
+        _session.CurrentDpiChanged -= OnCurrentDpiChanged;
+        _session.DpiLedUpdated -= OnDpiLedUpdated;
+        _session.ProfileChanged -= OnProfileChanged;
+        _session.DeviceInfoUpdated -= OnDeviceInfoUpdated;
+
         _session.Dispose();
     }
 
@@ -1844,12 +2044,9 @@ public sealed class DpiSlotViewModel : INotifyPropertyChanged
             _xdpi = (byte)x;
             _dpiex = (byte)(((x >> 8) << 2) | ((x >> 8) << 6));
             Raise(nameof(DpiValue));
-            Raise(nameof(DpiValueText));
             Edited?.Invoke(this);
         }
     }
-
-    public string DpiValueText => $"{DpiValue} DPI";
 
     /// <summary>Сырые значения для записи в map (см. DpiValue).</summary>
     public (byte XDpi, byte Dpiex) Raw => (_xdpi, _dpiex);
@@ -1889,8 +2086,6 @@ public sealed class DpiSlotViewModel : INotifyPropertyChanged
         if (color is { Length: >= 3 })
             _color = color;
         Raise(nameof(DpiValue));
-        Raise(nameof(DpiValueText));
-        Raise(nameof(Color));
         Raise(nameof(ColorBrush));
         IsLevelActive = levelActive;
         IsActiveByDevice = activeByDevice;
@@ -1913,10 +2108,6 @@ public sealed class ButtonSlotViewModel : INotifyPropertyChanged
 {
     /// <summary>Размер маркера на изображении: 22px, центр ± MarkerRadius.</summary>
     public const double MarkerRadius = 11;
-
-    /// <summary>Холст под dev3.png (Viewbox/Grid) — границы для перетаскивания.</summary>
-    public const double CanvasWidth = 432;
-    public const double CanvasHeight = 356;
 
     private ActionOption[] _actions = ActionOption.All;
     private int _selectedActionIndex;

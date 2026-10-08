@@ -30,7 +30,33 @@ internal sealed class OsdWindow : Window
     private readonly int _positionIndex;
     private readonly int _durationMs;
     private DispatcherTimer? _holdTimer;
+    private DispatcherTimer? _closeTimer;
     private bool _closing;
+
+    /// <summary>
+    /// Гасит оба таймера окна и зануляет ссылки на них. Оба лямбда-хендлера
+    /// захватывают this, поэтому незакрытый таймер удерживает уже мёртвое окно
+    /// и продолжает в него стучаться. Вызывается из FadeOut, ForceClose и Closed.
+    /// </summary>
+    private void StopTimers()
+    {
+        if (_holdTimer is not null)
+        {
+            _holdTimer.Stop();
+            _holdTimer = null;
+        }
+        if (_closeTimer is not null)
+        {
+            _closeTimer.Stop();
+            _closeTimer = null;
+        }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        StopTimers();
+        base.OnClosed(e);
+    }
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
@@ -76,7 +102,6 @@ internal sealed class OsdWindow : Window
             _holdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250 + _durationMs) };
             _holdTimer.Tick += (_, _) =>
             {
-                _holdTimer.Stop();
                 if (!_closing)
                     FadeOut();
             };
@@ -129,7 +154,7 @@ internal sealed class OsdWindow : Window
         if (_closing)
             return;
         _closing = true;
-        _holdTimer?.Stop();
+        StopTimers();
         try
         {
             var exitStoryboard = Application.Current.FindResource("MotionOsdExit") as Storyboard;
@@ -142,13 +167,15 @@ internal sealed class OsdWindow : Window
 
         // Закрытие по таймеру, а не по Completed: ресурсный Storyboard
         // не гарантирует Completed (часы могут не завершиться) — окно зависало.
-        var closeTimer = new DispatcherTimer
+        // Таймер в поле, а не в локальной переменной: иначе ForceClose() не мог
+        // его остановить, и он продолжал звать Close() на уже закрытое окно.
+        _closeTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(200),  // Exit-анимация 150 мс + запас
         };
-        closeTimer.Tick += (_, _) =>
+        _closeTimer.Tick += (_, _) =>
         {
-            closeTimer.Stop();
+            StopTimers();
             try
             {
                 Close();
@@ -158,13 +185,13 @@ internal sealed class OsdWindow : Window
                 // Уже закрыт.
             }
         };
-        closeTimer.Start();
+        _closeTimer.Start();
     }
 
     private void ForceClose()
     {
         _closing = true;
-        _holdTimer?.Stop();
+        StopTimers();
         try
         {
             Close();

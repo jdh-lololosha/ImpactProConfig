@@ -17,7 +17,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type Button}">
-                        <Grid RenderTransformOrigin="0.5,0.5">
+                        <Grid x:Name="MarkerRoot" RenderTransformOrigin="0.5,0.5">
                             <Grid.RenderTransform>
                                 <ScaleTransform ScaleX="1" ScaleY="1" />
                             </Grid.RenderTransform>
@@ -59,13 +59,15 @@
                             <EventTrigger RoutedEvent="MouseEnter">
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX"
+                                        <DoubleAnimation Storyboard.TargetName="MarkerRoot"
+                                                         Storyboard.TargetProperty="RenderTransform.ScaleX"
                                                          To="1.15" Duration="0:0:0.12">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY"
+                                        <DoubleAnimation Storyboard.TargetName="MarkerRoot"
+                                                         Storyboard.TargetProperty="RenderTransform.ScaleY"
                                                          To="1.15" Duration="0:0:0.12">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
@@ -83,13 +85,15 @@
                             <EventTrigger RoutedEvent="MouseLeave">
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX"
+                                        <DoubleAnimation Storyboard.TargetName="MarkerRoot"
+                                                         Storyboard.TargetProperty="RenderTransform.ScaleX"
                                                          To="1" Duration="0:0:0.12">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY"
+                                        <DoubleAnimation Storyboard.TargetName="MarkerRoot"
+                                                         Storyboard.TargetProperty="RenderTransform.ScaleY"
                                                          To="1" Duration="0:0:0.12">
                                             <DoubleAnimation.EasingFunction>
                                                 <CubicEase EasingMode="EaseOut" />
@@ -370,7 +374,8 @@
                                                   HorizontalContentAlignment="Left"
                                                   VerticalAlignment="Center"
                                                   ItemsSource="{Binding Actions}"
-                                                  SelectedIndex="{Binding SelectedActionIndex, Mode=TwoWay}">
+                                                  SelectedIndex="{Binding SelectedActionIndex, Mode=TwoWay}"
+                                                  IsEnabled="{Binding IsConnected}">
                                             <!-- ItemTemplate вместо DisplayMemberPath: шаблон ComboBox
                                                  показывает SelectionBoxItemTemplate (= ItemTemplate),
                                                  DisplayMemberPath в закрытой строке игнорируется. -->

@@ -24,7 +24,8 @@ public partial class DpiPage : Page
     /// <summary>Клик по карточке DPI-ступени — выбор уровня.</summary>
     private void DpiCard_Click(object sender, RoutedEventArgs e)
     {
-        if (Vm != null && sender is Border { Tag: int slot })
+        // Карточка — Button (см. DpiCardButton), Tag = SlotIndex.
+        if (Vm != null && sender is FrameworkElement { Tag: int slot })
             Vm.SelectedDpiIndex = slot;
     }
 

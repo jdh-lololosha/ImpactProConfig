@@ -378,8 +378,11 @@ public sealed class DeviceSession : IDisposable
                 SetState(ConnectionState.Disconnected);
                 return null;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                // Раньше блок был пустым: сбой чтения флеша был неотличим от
+                // «устройства нет». Теперь причина попадает в лог.
+                Log($"scan: исключение при чтении флеша {ex.GetType().Name}: {ex.Message}");
                 SetState(ConnectionState.Error);
                 return null;
             }
@@ -396,11 +399,17 @@ public sealed class DeviceSession : IDisposable
     /// Путь повторяет официалку: DataParser.Update(gFlashDataMap) ->
     /// CS_ProtocolDataUpdate(ptr). После записи флеш перечитывается и
     /// сравнивается побайтово с записанным map.
+    ///
+    /// _connectLock обязателен: вендерская сессия одна на процесс, поэтому запись
+    /// не должна пересекаться с CS_UsbServer_Exit из StopInternal (ReScan/RescanAsync).
     /// </summary>
-    public Task<WriteResult> WriteFlashAsync(FlashDataMap map, CancellationToken ct = default)
+    public async Task<WriteResult> WriteFlashAsync(FlashDataMap map, CancellationToken ct = default)
     {
-        return Task.Run(() =>
+        await _connectLock.WaitAsync(ct);
+        try
         {
+            return await Task.Run(() =>
+            {
             int size = Marshal.SizeOf<FlashDataMap>();
             Log($"WRITE: «Применить» -> CS_ProtocolDataUpdate (структура {size} байт)");
 
@@ -457,17 +466,27 @@ public sealed class DeviceSession : IDisposable
                 Success = false,
                 Error = "Запись выполнена, но перечитать флеш не удалось"
             };
-        }, ct);
+            }, ct);
+        }
+        finally
+        {
+            _connectLock.Release();
+        }
     }
 
     /// <summary>
     /// Смена профиля: команда SetCurrentConfig + перечитывание флеша нового
     /// профиля (без записи флеша). Повторяет FormMain.customComboBox_Config_OnSelectedIndexChanged.
+    ///
+    /// _connectLock обязателен по той же причине, что и в WriteFlashAsync.
     /// </summary>
-    public Task<WriteResult> SwitchProfileAsync(int configIndex, CancellationToken ct = default)
+    public async Task<WriteResult> SwitchProfileAsync(int configIndex, CancellationToken ct = default)
     {
-        return Task.Run(() =>
+        await _connectLock.WaitAsync(ct);
+        try
         {
+            return await Task.Run(() =>
+            {
             Log($"PROFILE: CS_UsbServer_SetCurrentConfig({configIndex}) + перечитывание флеша");
             try
             {
@@ -503,7 +522,12 @@ public sealed class DeviceSession : IDisposable
                 Log($"PROFILE: {ex.Message}");
                 return new WriteResult { Success = false, Error = ex.Message };
             }
-        }, ct);
+            }, ct);
+        }
+        finally
+        {
+            _connectLock.Release();
+        }
     }
 
     /// <summary>Отслеживание вставки/выдёргивания USB (по образцу официалки, 600 мс).</summary>
@@ -653,9 +677,11 @@ public sealed class DeviceSession : IDisposable
                 HidUsbNative.CS_UsbServer_SetPCDriverStatus(false);
                 HidUsbNative.Exit();
             }
-            catch
+            catch (Exception ex)
             {
-                // Ошибки закрытия не критичны.
+                // Раньше пустой catch: провал CS_UsbServer_Exit оставлял висящий
+                // нативный хэндл, и никто об этом не узнавал.
+                Log($"stop: ошибка выхода из USB-сессии {ex.GetType().Name}: {ex.Message}");
             }
             _started = false;
         }

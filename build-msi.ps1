@@ -1,20 +1,20 @@
-﻿# ╨У╨╡╨╜╨╡╤А╨╕╤А╤Г╨╡╤В .wxs ╨┤╨╗╤П WiX v4/v5 ╨╕╨╖ ╤Б╨╛╨┤╨╡╤А╨╢╨╕╨╝╨╛╨│╨╛ publish-╨┐╨░╨┐╨║╨╕ ╨╕ ╤Б╨╛╨▒╨╕╤А╨░╨╡╤В MSI.
-# ╨Я╨╛╨║╤А╤Л╨▓╨░╨╡╤В ╨┐╨╛╨┤╨┐╨░╨┐╨║╨╕ (╨╡╤Б╨╗╨╕ ╨┐╨╛╤П╨▓╤П╤В╤Б╤П), ╤П╤А╨╗╤Л╨║╨╕ ╨╜╨░ ╤А╨░╨▒╨╛╤З╨╡╨╝ ╤Б╤В╨╛╨╗╨╡ ╨╕ ╨▓ ╨╝╨╡╨╜╤О ╨Я╤Г╤Б╨║.
+﻿# Генерирует .wxs для WiX v4/v5 из содержимого publish-папки и собирает MSI.
+# Покрывает подпапки (если появятся), ярлыки на рабочем столе и в меню Пуск.
 param(
     [string]$PublishDir = (Join-Path $PSScriptRoot 'publish')
 )
 
 $ErrorActionPreference = 'Stop'
 
-# ╨Т╨╡╤А╤Б╨╕╤О ╨▒╨╡╤А╤С╨╝ ╨╕╨╖ csproj тАФ ╨╡╨┤╨╕╨╜╤Б╤В╨▓╨╡╨╜╨╜╤Л╨╣ ╨╕╤Б╤В╨╛╤З╨╜╨╕╨║. ╨а╨░╨╜╤М╤И╨╡ ╨╛╨╜╨░ ╨▒╤Л╨╗╨░ ╨▓╨┐╨╕╤Б╨░╨╜╨░
-# ╨╖╨┤╨╡╤Б╤М ╨╕ ╨▓ .wxs ╨▓╤А╤Г╤З╨╜╤Г╤О, ╨╕╨╖-╨╖╨░ ╤З╨╡╨│╨╛ MSI ╤Б╨╛╨▒╨╕╤А╨░╨╗╤Б╤П ╤Б╨╛ ╤Б╤В╨░╤А╨╛╨╣ ╨▓╨╡╤А╤Б╨╕╨╡╨╣,
-# ╨╕ ╨░╨▓╤В╨╛╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╕╨╡ ╨╜╨╡ ╤Б╤А╨░╨▒╨░╤В╤Л╨▓╨░╨╗╨╛ (╨╜╨╛╨▓╤Л╨╣ msi ╨╜╨╡ ╨▓╨╕╨┤╨╡╨╗ ╤Б╤В╨░╤А╤Л╨╣ ╨┐╤А╨╛╨┤╤Г╨║╤В).
+# Версию берём из csproj - единственный источник. Раньше она была вписана
+# здесь и в .wxs вручную, из-за чего MSI собирался со старой версией,
+# и автообновление не срабатывало (новый msi не видел старый продукт).
 $csprojPath = Join-Path $PSScriptRoot 'ImpactProConfig.csproj'
 [xml]$csproj = Get-Content -LiteralPath $csprojPath
-# ╨Т╨Р╨Ц╨Э╨Ю: .InnerText, ╨░ ╨╜╨╡ ╨╕╨╜╨┤╨╡╨║╤Б╨░╤Ж╨╕╤П. ("1.1.0")[0] ╨┤╨░╤С╤В System.Char '1',
-# ╨╕ ╨╕╨╖ ╤Н╤В╨╛╨│╨╛ ╨┐╨╛╨╗╤Г╤З╨░╨╗╤Б╤П MSI ╨▓╨╕╨┤╨░ "v1-Setup" тАФ ╨▓╨╡╤А╤Б╨╕╤П ╨╝╨╛╨╗╤З╨░ ╤В╨╡╤А╤П╨╗╨░ ╨▓╤Б╤С ╨┐╨╛╤Б╨╗╨╡ ╤В╨╛╤З╨║╨╕.
-# ╨н╨╗╨╡╨╝╨╡╨╜╤В╤Л ╨▒╤Л╨▓╨░╤О╤В ╨╕ XmlElement, ╨╕ ╤Б╤В╤А╨╛╨║╨╛╨╣ (PowerShell ╤Б╨╜╨╕╨╝╨░╨╡╤В ╤В╨╕╨┐ ╤Б ╨┐╤А╨╛╤Б╤В╤Л╤Е
-# ╤Г╨╖╨╗╨╛╨▓), ╨┐╨╛╤Н╤В╨╛╨╝╤Г ╨▒╨╡╤А╤С╨╝ ╤В╨╡╨║╤Б╤В ╤В╨╡╤А╨┐╨╕╨╝╨╛, ╨▒╨╡╨╖ ╨╛╨▒╤А╨░╤Й╨╡╨╜╨╕╤П ╨║ .InnerText ╨▓ ╤Д╨╕╨╗╤М╤В╤А╨╡.
+# ВАЖНО: .InnerText, а не индексация. ("1.1.0")[0] даёт System.Char '1',
+# и из этого получался MSI вида "v1-Setup" - версия молча теряла всё после точки.
+# Элементы бывают и XmlElement, и строкой (PowerShell снимает тип с простых
+# узлов), поэтому берём текст терпимо, без обращения к .InnerText в фильтре.
 $versionText = $csproj.Project.PropertyGroup.Version |
     Where-Object { if ($_ -is [string]) { $_.Trim() } else { $_ -and $_.InnerText.Trim() } } |
     Select-Object -First 1
@@ -41,7 +41,7 @@ function New-DeterministicGuid([string]$s) {
 }
 function Esc([string]$s) { [System.Security.SecurityElement]::Escape($s) }
 
-# ---- ╨б╨▒╨╛╤А ╨┤╨░╨╜╨╜╤Л╤Е ╨╛ ╤Д╨░╨╣╨╗╨░╤Е/╨┐╨░╨┐╨║╨░╤Е ----
+# ---- Сбор данных о файлах/папках ----
 $root = (Resolve-Path $PublishDir).Path.TrimEnd('\')
 $rows = Get-ChildItem -LiteralPath $root -Recurse -File | ForEach-Object {
     $rel = $_.FullName.Substring($root.Length).TrimStart('\')
@@ -54,8 +54,8 @@ $childrenOf = @{}                          # parent dir -> [child dirs]
 $fileByDir  = @{}                          # dir -> rows
 
 foreach ($row in $rows) {
-    # ╨Т╨Р╨Ц╨Э╨Ю: @(...) ╨╛╨▒╤П╨╖╨░╤В╨╡╨╗╨╡╨╜ тАФ ╨▒╨╡╨╖ ╨╜╨╡╨│╨╛ if ╨▓╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В ╤Б╨║╨░╨╗╤П╤А "cs",
-    # ╨╕ $parts[0] ╨┤╨░╤С╤В [char]'c' (╨┐╨╡╤А╨▓╤Л╨╣ ╤Б╨╕╨╝╨▓╨╛╨╗), ╨░ ╨╜╨╡ ╤Б╤В╤А╨╛╨║╤Г ╨║╨░╤В╨░╨╗╨╛╨│╨░.
+    # ВАЖНО: @(...) обязателен - без него if возвращает скаляр "cs",
+    # и $parts[0] даёт [char]'c' (первый символ), а не строку каталога.
     $parts = @()
     if ($row.Dir -ne '') { $parts = @($row.Dir -split '\\') }
     $cur = ''
@@ -72,7 +72,7 @@ foreach ($row in $rows) {
     $fileByDir[$row.Dir].Add($row)
 }
 
-# ---- ╨а╨╡╨║╤Г╤А╤Б╨╕╨▓╨╜╨░╤П ╨│╨╡╨╜╨╡╤А╨░╤Ж╨╕╤П XML ----
+# ---- Рекурсивная генерация XML ----
 $script:idx = 0
 $script:refs = New-Object System.Collections.Generic.List[string]
 
@@ -103,7 +103,7 @@ function Write-DirXml([string]$d, [string]$indent) {
 
 $inner = Write-DirXml '' '      '
 
-# ---- ╨п╤А╨╗╤Л╨║╨╕ ----
+# ---- Ярлыки ----
 $desktopGuid = '{5C2E9F7A-1B34-4D6E-8A0C-2F7D9E4B6A31}'
 $startGuid   = '{7B4D2A19-6E52-4C8F-9D3B-1A6E5C8F0B72}'
 $script:refs.Add('C_DesktopShortcut')
@@ -126,11 +126,11 @@ $shortcuts = @"
 
 $featureRefs = ($script:refs | ForEach-Object { "      <ComponentRef Id=`"$_`" />" }) -join "`n"
 
-# UpgradeCode ╨Э╨Х ╨╖╨░╨▓╨╕╤Б╨╕╤В ╨╛╤В ╨▓╨╡╤А╤Б╨╕╨╕: ╨╛╨╜ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨╛╤Б╤В╨░╨▓╨░╤В╤М╤Б╤П ╨┐╤А╨╡╨╢╨╜╨╕╨╝, ╨╕╨╜╨░╤З╨╡
-# ╤Г╤Б╤В╨░╨╜╨╛╨▓╤Й╨╕╨║ ╨┐╨╡╤А╨╡╤Б╤В╨░╨╜╨╡╤В ╨▓╨╕╨┤╨╡╤В╤М ╤Г╨╢╨╡ ╤Г╤Б╤В╨░╨╜╨╛╨▓╨╗╨╡╨╜╨╜╤Л╨╣ ╨┐╤А╨╛╨┤╤Г╨║╤В ╨║╨░╨║ ╤Б╨▓╨╛╤О ╨░╨┐╨│╤А╨╡╨╣╨┤-╨▓╨╡╤А╤Б╨╕╤О.
+# UpgradeCode НЕ зависит от версии: он должен оставаться прежним, иначе
+# установщик перестанет видеть уже установленный продукт как свою апгрейд-версию.
 $upgradeGuid = New-DeterministicGuid 'ImpactProConfig-upgrade-v1'
 
-# ---- ╨Ш╤В╨╛╨│╨╛╨▓╤Л╨╣ .wxs ----
+# ---- Итоговый .wxs ----
 $wxs = @"
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
@@ -155,10 +155,10 @@ $featureRefs
 
 $wxsPath = Join-Path $PSScriptRoot 'build\installer.wxs'
 New-Item -ItemType Directory -Force -Path (Split-Path $wxsPath) | Out-Null
-# WiX ╨╛╨╢╨╕╨┤╨░╨╡╤В UTF-8 (╨▓ ╤В.╤З. ╤Б BOM) тАФ ╨╖╨░╨┐╨╕╤Б╤Л╨▓╨░╨╡╨╝ ╤П╨▓╨╜╨╛.
+# WiX ожидает UTF-8 (в т.ч. с BOM) - записываем явно.
 [System.IO.File]::WriteAllText($wxsPath, $wxs, (New-Object System.Text.UTF8Encoding($true)))
 
-# ---- ╨Я╨╛╨╕╤Б╨║ wix ----
+# ---- Поиск wix ----
 $wixCmd = Get-Command wix -ErrorAction SilentlyContinue
 if (-not $wixCmd) {
     Write-Host 'wix not found in PATH, installing...'
@@ -170,7 +170,7 @@ if (-not $wixCmd) {
 }
 if (-not (Test-Path $wixExe)) { $wixExe = 'wix' }
 
-# ---- ╨б╨▒╨╛╤А╨║╨░ ----
+# ---- Сборка ----
 $buildDir = Join-Path $PSScriptRoot 'build'
 Push-Location $buildDir
 try {

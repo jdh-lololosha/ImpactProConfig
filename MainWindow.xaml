@@ -137,6 +137,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Text="{Binding StatusText}"
@@ -148,7 +149,7 @@
                 <!-- Плашка обновления. По умолчанию скрыта: DataTrigger
                      включает её только когда IsUpdateAvailable = True. -->
                 <ui:InfoBar Grid.Row="1"
-                            Grid.ColumnSpan="3"
+                            Grid.ColumnSpan="4"
                             Margin="0,8,0,0"
                             Severity="Informational"
                             Title="Доступна новая версия"
@@ -195,16 +196,33 @@
                                VerticalAlignment="Center" />
                 </Border>
 
-                <ui:Button Grid.Column="2"
-                           Appearance="Primary"
-                           Content="Применить"
-                           Foreground="White"
-                           IsEnabled="{Binding CanApply}"
-                           Click="Apply_Click">
-                    <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="Save24" />
-                    </ui:Button.Icon>
-                </ui:Button>
+                <!-- Отсчёт до автоприменения. Виден только пока IsAutoApplyPending. -->
+                <TextBlock Grid.Row="0" Grid.Column="2"
+                           Text="{Binding AutoApplyCountdownText}"
+                           Opacity="0.7"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Margin="0,0,10,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsAutoApplyPending}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <!-- Отсчёт: откат локально. После записи: откат применённого в мышь. -->
+                <ui:Button Grid.Row="0" Grid.Column="3"
+                           Content="Отменить"
+                           Appearance="Secondary"
+                           Margin="0,0,10,0"
+                           ToolTip="До записи — отменить правку, после — откатить применённые изменения"
+                           IsEnabled="{Binding CanCancel}"
+                           Click="CancelAutoApply_Click" />
             </Grid>
         </Border>
     </Grid>

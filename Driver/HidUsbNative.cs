@@ -136,7 +136,8 @@ public static class HidUsbNative
 
     // ===== ГЕЙТ ЗАПИСИ =====
     // Вызовы ниже — ЕДИНСТВЕННЫЕ функции записи в проекте. Они вызываются
-    // ТОЛЬКО из DeviceSession.WriteFlashAsync по явному нажатию «Применить».
+    // ТОЛЬКО из DeviceSession.WriteFlashAsync: ручное «Применить» или
+    // автоприменение по таймеру (MainViewModel.ApplyAsync).
     // При старте приложения эти пути не используются (см. ConnectReadOnlyAsync).
 
     /// <summary>Запись всего FlashDataMap в мышь (DataParser.Update официалки).</summary>

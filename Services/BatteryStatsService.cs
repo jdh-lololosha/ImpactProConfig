@@ -57,6 +57,18 @@ internal sealed class BatteryStatsService
     private DateTimeOffset _lastSampleAt = DateTimeOffset.MinValue;
     private bool _loaded;
 
+    /// <summary>Кэш скорости разряда, %/ч. null — данных пока недостаточно.</summary>
+    private double? _cachedRate;
+
+    /// <summary>true — _cachedRate соответствует текущему состоянию _data.</summary>
+    private bool _rateValid;
+
+    /// <summary>Снимок кэша под _gate (иначе UI читал бы поле без синхронизации).</summary>
+    private double? CachedRate
+    {
+        get { lock (_gate) return _cachedRate; }
+    }
+
     public BatteryStatsService(string? directory = null)
     {
         // По умолчанию %LOCALAPPDATA%\ImpactProConfig — туда есть права на запись
@@ -98,43 +110,78 @@ internal sealed class BatteryStatsService
             if (_data.Samples.Count > MaxSamples)
                 _data.Samples.RemoveRange(0, _data.Samples.Count - MaxSamples);
 
-            Save();
+            RecalculateRateLocked();
+            QueueSave();
         }
     }
 
-    /// <summary>Скорость разряда в %/час. null — данных пока недостаточно.</summary>
+    /// <summary>
+    /// Пересчёт скорости разряда по текущему циклу разряда. Вызывается под _gate.
+    /// Цикл начинается с последней точки зарядки (Discharging == false): если брать
+    /// первый и последний разряжающийся замер по всей истории, то время между ними
+    /// включает все циклы зарядки между ними и оценка %/ч занижается в разы.
+    /// </summary>
+    private void RecalculateRateLocked()
+    {
+        var samples = _data.Samples;
+        int firstIdx = -1;
+        for (int i = samples.Count - 1; i >= 0; i--)
+        {
+            if (!samples[i].Discharging)
+            {
+                firstIdx = i + 1;   // начало текущего цикла разряда
+                break;
+            }
+        }
+        if (firstIdx < 0)
+            firstIdx = 0;           // зарядки в истории не было — берём всё
+
+        BatterySample? first = null, last = null;
+        for (int i = firstIdx; i < samples.Count; i++)
+        {
+            var s = samples[i];
+            if (!s.Discharging)
+                continue;
+            first ??= s;
+            last = s;
+        }
+
+        if (first is null || last is null || ReferenceEquals(first, last))
+        {
+            _cachedRate = null;
+            _rateValid = true;
+            return;
+        }
+
+        double drop = first.Percent - last.Percent;
+        double hours = (last.At - first.At).TotalHours;
+        if (hours <= 0 || drop < MinDropPercent)
+        {
+            _cachedRate = null;
+            _rateValid = true;
+            return;
+        }
+        double rate = drop / hours;
+        _cachedRate = rate < MinDrainPerHour ? null : rate;
+        _rateValid = true;
+    }
+
+    /// <summary>
+    /// Скорость разряда в %/час по текущему циклу разряда. null — данных пока
+    /// недостаточно. Отдаёт кэш: пересчёт делается в Record, а не на каждый
+    /// батарейный пакет (иначе UI сканировал бы 4000 сэмплов четыре раза).
+    /// </summary>
     public double? DrainPerHour()
     {
-        lock (_gate)
+        if (!_rateValid)
         {
-            EnsureLoaded();
-
-            double? drop = null;
-            double? hours = null;
-
-            BatterySample? first = null;
-            BatterySample? last = null;
-            for (int i = 0; i < _data.Samples.Count; i++)
+            lock (_gate)
             {
-                var s = _data.Samples[i];
-                if (!s.Discharging)
-                    continue;
-                first ??= s;
-                last = s;
+                EnsureLoaded();
+                RecalculateRateLocked();
             }
-
-            if (first is null || last is null || ReferenceEquals(first, last))
-                return null;
-
-            drop = first.Percent - last.Percent;
-            hours = (last.At - first.At).TotalHours;
-
-            if (hours <= 0 || drop < MinDropPercent)
-                return null;
-
-            double rate = drop.Value / hours.Value;
-            return rate < MinDrainPerHour ? null : rate;
         }
+        return CachedRate;
     }
 
     /// <summary>
@@ -185,16 +232,52 @@ internal sealed class BatteryStatsService
         }
     }
 
-    private void Save()
+    /// <summary>
+    /// Ставит файл на перезапись в фоне. Снимок данных делается под _gate сразу,
+    /// а сама запись идёт вне лока и вне UI-потока: раньше File.WriteAllText всей
+    /// истории выполнялся на UI-потоке и блокировал интерфейс.
+    /// </summary>
+    private void QueueSave()
     {
+        BatteryStatsFile snapshot;
         try
         {
-            File.WriteAllText(_path, JsonSerializer.Serialize(_data,
-                new JsonSerializerOptions { WriteIndented = true }));
+            snapshot = new BatteryStatsFile
+            {
+                SchemaVersion = _data.SchemaVersion,
+                Samples = new List<BatterySample>(_data.Samples),
+            };
+        }
+        catch
+        {
+            return;
+        }
+
+        _ = Task.Run(() => SaveSnapshot(snapshot));
+    }
+
+    /// <summary>
+    /// Запись снимка атомарно: сначала .tmp, затем подмена исходного файла.
+    /// Обрыв записи (сбой питания, убитый процесс) больше не оставляет обрезанный
+    /// battery_stats.json, который EnsureLoaded потом молча выбросил бы вместе
+    /// со всей историей.
+    /// </summary>
+    private void SaveSnapshot(BatteryStatsFile snapshot)
+    {
+        string tmp = _path + ".tmp";
+        try
+        {
+            string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+            {
+                WriteIndented = false,   // файл машинный, отступы только раздувают его
+            });
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, _path, overwrite: true);
         }
         catch
         {
             // Недоступная папка (Program Files без прав) — молча продолжаем в памяти.
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { /* не критично */ }
         }
     }
 }

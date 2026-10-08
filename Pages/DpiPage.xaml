@@ -269,7 +269,8 @@
                                       Minimum="50"
                                       Maximum="26000"
                                       SmallChange="50"
-                                      Value="{Binding SelectedDpiValue, Mode=TwoWay}" />
+                                      Value="{Binding SelectedDpiValue, Mode=TwoWay}"
+                                      IsEnabled="{Binding IsConnected}" />
                     </Grid>
                     </Border>
                 </StackPanel>

@@ -33,6 +33,14 @@ public partial class PairingDialog : FluentWindow
             double elapsed = (DateTime.UtcNow - _startedAt).TotalSeconds;
             ProgressBar.Value = Math.Min(100, elapsed / TimeoutSeconds * 100.0);
         };
+
+        // Закрытие крестиком на середине сопряжения: без этого таймер тикал бы
+        // вечно, а лямбда продолжала бы держать закрытое окно и ProgressBar.
+        Closed += (_, _) =>
+        {
+            _running = false;
+            _timer.Stop();
+        };
     }
 
     private MainViewModel? Vm => DataContext as MainViewModel;

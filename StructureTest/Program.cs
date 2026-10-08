@@ -4,10 +4,24 @@ using ImpactProConfig.Driver;
 // Офлайн-проверка структуры FlashDataMap против эталонного дампа.
 // Никакого USB — только чтение файла и мемуар-десериализация.
 
-const string BinPath = @"C:\Users\gygyh\AppData\Local\Ardor\Impact PRO\Device_Info\Device_CID16_MID6.bin";
+// Путь к эталонному дампу: раньше был жёстко зашит на одну машину
+// (C:\Users\<домен>\...), из-за чего утилита падала на любом другом
+// аккаунте. Берём из аргумента, иначе — из %LOCALAPPDATA%.
+string binPath = args.Length > 0
+    ? args[0]
+    : Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        @"Ardor\Impact PRO\Device_Info\Device_CID16_MID6.bin");
 
-var bytes = File.ReadAllBytes(BinPath);
-Console.WriteLine($"Файл: {BinPath}");
+if (!File.Exists(binPath))
+{
+    Console.WriteLine($"Файл не найден: {binPath}");
+    Console.WriteLine("Передай путь аргументом: dotnet run -- <путь-к-дампу.bin>");
+    return 1;
+}
+
+var bytes = File.ReadAllBytes(binPath);
+Console.WriteLine($"Файл: {binPath}");
 Console.WriteLine($"Размер файла: {bytes.Length} байт");
 
 int structSize = Marshal.SizeOf<FlashDataMap>();
