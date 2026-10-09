@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -38,6 +39,21 @@ public partial class MainWindow : FluentWindow
         DataContext = _viewModel;
 
         Loaded += OnLoaded;
+
+        // Пружина нажатия цепляется на окно, а не через Style.
+        //
+        // Почему не Style: неявный стиль в Application.Resources перекрывает
+        // неявный стиль WPF-UI (у него низший приоритет из-за
+        // MergedDictionaries), а BasedOn на стиль без BasedOn отбрасывает
+        // Background/Foreground/шаблон - кнопка рисуется системной серой.
+        // Тот же приём не годится и для BasedOn="{StaticResource
+        // {x:Type ui:Button}}": разрешение неявного стиля привело бы к самому
+        // себе. Обработчики на окне меняют только RenderTransform и не
+        // трогают Style вообще.
+        PreviewMouseLeftButtonDown += OnPressDown;
+        PreviewMouseLeftButtonUp += OnPressUp;
+        PreviewMouseMove += OnPressCancel;
+        LostMouseCapture += OnPressCancel;
         Closing += OnClosing;
 
         // --- Hot-Plug: перехват WM_DEVICECHANGE ---
@@ -280,6 +296,142 @@ public partial class MainWindow : FluentWindow
         sb?.Begin(page);
 
         AnimateCardsCascade(page);
+    }
+
+    /// <summary>Пружина нажатия: Scale 0.95 за 80 мс, отскок 1.02 и посадка в 1.0.</summary>
+    private void OnPressDown(object sender, MouseButtonEventArgs e)
+    {
+        var button = FindPressTarget(e.OriginalSource as DependencyObject);
+        if (button is null)
+            return;
+
+        var scale = EnsureScale(button);
+        if (scale is null)
+            return;
+
+        // Стартуем от текущего значения, а не от 1.0: если кнопку уже
+        // отпустили и тут же нажали снова, прыжка не будет.
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, SpringAnimation(
+            scale.ScaleX, PressScale, TimeSpan.FromMilliseconds(80), null));
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, SpringAnimation(
+            scale.ScaleY, PressScale, TimeSpan.FromMilliseconds(80), null));
+    }
+
+    private void OnPressUp(object sender, MouseButtonEventArgs e)
+    {
+        ReleaseSpring(e.OriginalSource as DependencyObject);
+    }
+
+    /// <summary>
+    /// Уход курсора с кнопки во время нажатия: если мышь отжали мимо кнопки
+    /// или увели за её пределы, нажатие «залипает» на Scale 0.95. Этот
+    /// обработчик возвращает элемент в 1.0.
+    /// </summary>
+    private void OnPressCancel(object sender, MouseEventArgs e)
+    {
+        if (e is MouseButtonEventArgs mbe)
+            ReleaseSpring(mbe.OriginalSource as DependencyObject);
+        else if (e.OriginalSource is DependencyObject src)
+            ReleaseSpring(src);
+    }
+
+    private void ReleaseSpring(DependencyObject? source)
+    {
+        var button = FindPressTarget(source);
+        var scale = EnsureScale(button);
+        if (scale is null)
+            return;
+
+        // Перелёт: 0.95 -> 1.02 за 150 мс, затем посадка в 1.0.
+        var bounce = SpringAnimation(
+            PressScale, ReleaseOvershoot, TimeSpan.FromMilliseconds(150),
+            new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.3 });
+        bounce.Completed += (_, _) =>
+        {
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, SpringAnimation(
+                ReleaseOvershoot, 1.0, TimeSpan.FromMilliseconds(100),
+                new CubicEase { EasingMode = EasingMode.EaseOut }));
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, SpringAnimation(
+                ReleaseOvershoot, 1.0, TimeSpan.FromMilliseconds(100),
+                new CubicEase { EasingMode = EasingMode.EaseOut }));
+        };
+
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, bounce);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, bounce);
+    }
+
+    private const double PressScale = 0.95;
+    private const double ReleaseOvershoot = 1.02;
+
+    private static DoubleAnimation SpringAnimation(
+        double from, double to, TimeSpan duration, IEasingFunction? easing)
+    {
+        var anim = new DoubleAnimation(from, to, duration)
+        {
+            FillBehavior = FillBehavior.HoldEnd,
+        };
+        if (easing is not null)
+            anim.EasingFunction = easing;
+        else
+            anim.EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+        return anim;
+    }
+
+    /// <summary>
+    /// Ближайший ButtonBase вверх по визуальному дереву от точки нажатия.
+    /// Ищем от источника события, а не от фокуса: фокус может быть на поле
+    /// ввода внутри карточки, а пружинить нужно саму карточку-кнопку.
+    /// </summary>
+    private static ButtonBase? FindPressTarget(DependencyObject? source)
+    {
+        // Пять уровней вверх — достаточно для шаблонов WPF-UI; глубже
+        // заходить смысла нет: вложенных кнопок в кнопке не бывает.
+        for (int i = 0; source is not null && i < 5; i++)
+        {
+            if (source is ButtonBase b)
+                return b;
+            source = source is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(source)
+                : LogicalTreeHelper.GetParent(source);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Возвращает ScaleTransform элемента, создавая его при необходимости.
+    ///
+    /// Важно не затереть чужую трансформацию: если у элемента уже есть
+    /// RenderTransform, который не ScaleTransform (например, анимация
+    /// появления), оборачиваем оба в TransformGroup. Иначе нажатие
+    /// уничтожило бы анимацию появления карточки.
+    /// </summary>
+    private static ScaleTransform? EnsureScale(DependencyObject? target)
+    {
+        if (target is not FrameworkElement fe)
+            return null;
+
+        if (fe.RenderTransform is ScaleTransform existing)
+            return existing;
+
+        var scale = new ScaleTransform(1, 1);
+        if (fe.RenderTransform is null || fe.RenderTransform.Value.IsIdentity)
+        {
+            fe.RenderTransform = scale;
+        }
+        else
+        {
+            // Чужая трансформация есть - сохраняем её в группе и добавляем
+            // наш масштаб вторым, чтобы оба применялись вместе.
+            var group = new TransformGroup();
+            group.Children.Add(fe.RenderTransform);
+            group.Children.Add(scale);
+            fe.RenderTransform = group;
+        }
+
+        // Без явного Origin масштаб берётся от (0,0), и кнопка «уезжает» из
+        // своей позиции вместо сжатия по центру.
+        fe.RenderTransformOrigin = new Point(0.5, 0.5);
+        return scale;
     }
 
     /// <summary>

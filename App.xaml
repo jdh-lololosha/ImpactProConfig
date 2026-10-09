@@ -80,25 +80,16 @@
                 Проверено пробой: BasedOn сохраняет исходный ControlTemplate,
                 фон становится #14FFFFFF, размеры из внешнего стиля применяются.
             -->
-            <!--
-            Пружинистые кнопки. Только RenderTransform и Opacity - оба
-            параметра WPF композитит на GPU без растеризации элемента.
+            <!-- Пружинистые кнопки ЗДЕСЬ СОЗНАТЕЛЬНО НЕ ОПИСАНЫ.
+             Неявный стиль в Application.Resources перекрывает неявный стиль
+             WPF-UI (MergedDictionaries имеют низший приоритет), а BasedOn
+             ImpactPressSpring ведёт на стиль без BasedOn - то есть без
+             Background/Foreground/шаблона. Результат: ui:Button теряет тему
+             и рисуется системным серым Button.
 
-            Триггер IsPressed ставит Scale 0.95; отскок с перелётом (1.02 ->
-            1.0) добавляется анимацией из кода при снятии нажатия. Проверено
-            пробой: у ui:Button и ui:NavigationViewItem IsPressed-триггеров в
-            теме нет, а подмена RenderTransform на ScaleControl Transforme
-            шаблон не ломает.
-        -->
-        <Style TargetType="{x:Type ui:Button}"
-               BasedOn="{StaticResource ImpactPressSpring}" />
-        <Style TargetType="{x:Type ui:NavigationViewItem}"
-               BasedOn="{StaticResource ImpactPressSpring}" />
-
-        <!-- ui:NumberBox сознательно НЕ включён: он наследует TextBox, а не
-             ButtonBase, поэтому IsPressed у него нет и стиль не применился бы.
-             Поля ввода не «пружинят» — они и так дают обратную связь рамкой при
-             фокусе. -->
+             Пружина вешается в коде (MainWindow.PressSpring) обработчиками
+             PreviewMouseLeftButtonDown/Up на самом окне: RenderTransform
+             ставится на любой ButtonBase в дереве, не затрагивая его Style. -->
 
         <Style x:Key="ImpactNumberBox"
                    TargetType="{x:Type ui:NumberBox}"

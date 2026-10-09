@@ -67,25 +67,20 @@
          RenderTransform на ScaleTransform шаблон не ломает. Поэтому общий
          стиль безопасен. -->
 
-    <Style x:Key="ImpactPressSpring" TargetType="{x:Type ButtonBase}">
-        <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
-        <Setter Property="RenderTransform">
-            <Setter.Value>
-                <ScaleTransform ScaleX="1" ScaleY="1" />
-            </Setter.Value>
-        </Setter>
-        <Style.Triggers>
-            <Trigger Property="IsPressed" Value="True">
-                <Setter Property="RenderTransform">
-                    <Setter.Value>
-                        <ScaleTransform ScaleX="0.95" ScaleY="0.95" />
-                    </Setter.Value>
-                </Setter>
-            </Trigger>
-            <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Opacity" Value="0.45" />
-            </Trigger>
-        </Style.Triggers>
-    </Style>
+    <!-- Пружины нажатия здесь нет СОЗНАТЕЛЬНО.
+
+         Стиль ImpactPressSpring жил здесь и был неявным для ui:Button в
+         App.xaml. Это ломало тему: неявный стиль в Application.Resources
+         перекрывает неявный стиль WPF-UI (MergedDictionaries - низший
+         приоритет), а BasedOn вёл на стиль TargetType="ButtonBase" БЕЗ
+         BasedOn, то есть без Background, Foreground и ControlTemplate.
+         Кнопки теряли оформление и рисовались системными серыми
+         квадратами с нечитаемым текстом.
+
+         Обойти это BasedOn="{StaticResource {x:Type ui:Button}}" нельзя:
+         разрешение неявного стиля привело бы к самому себе. Пружина
+         реализована обработчиками PreviewMouseLeftButtonDown/Up на
+         MainWindow (см. MainWindow.OnPressDown / OnPressUp) - они меняют
+         только RenderTransform и не касаются Style. -->
 
 </ResourceDictionary>
