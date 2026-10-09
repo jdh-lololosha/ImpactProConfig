@@ -1,0 +1,324 @@
+<Page x:Class="ImpactProConfig.Pages.AccelerationPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      Title="Акселерация">
+
+    <Page.Resources>
+        <!-- Строка параметра: подпись слева, ползунок в середине, число справа. -->
+        <Style x:Key="ParamRow" TargetType="{x:Type Grid}">
+            <Setter Property="Margin" Value="0,6,0,6" />
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="24,16,24,24" MaxWidth="1000" HorizontalAlignment="Center">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Заголовок -->
+            <StackPanel Grid.Row="0">
+                <ui:TextBlock Text="Акселерация" FontSize="28" FontWeight="SemiBold" />
+                <ui:TextBlock Text="Менеджер официального драйвера Raw Accel и настройка кривых отклика мыши."
+                              Opacity="0.6"
+                              Margin="0,4,0,16" />
+            </StackPanel>
+
+            <!-- ===== Статус драйвера ===== -->
+            <ui:Card Grid.Row="1" Padding="18" Margin="0,0,0,12">
+                <StackPanel>
+                    <ui:TextBlock Text="Драйвер" FontSize="18" FontWeight="SemiBold"
+                                  Margin="0,0,0,8" />
+                    <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding VersionText}"
+                               Opacity="0.6"
+                               Margin="0,6,0,0">
+                        <TextBlock.Style>
+                            <!-- Конвертеров bool->Visibility в проекте нет,
+                                 поэтому скрытие делаем DataTrigger. -->
+                            <Style TargetType="{x:Type TextBlock}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding VersionText}" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Плашка обновления драйвера Raw Accel -->
+                    <Border Margin="0,12,0,0"
+                            Padding="12"
+                            CornerRadius="8"
+                            Background="#1AFFFFFF"
+                            BorderBrush="{DynamicResource ImpactAccentBrush}"
+                            BorderThickness="1"
+                            IsEnabled="{Binding CanUpdate}">
+                        <Border.Style>
+                            <Style TargetType="{x:Type Border}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding UpdateAvailable}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBlock Grid.Column="0"
+                                          Text="{Binding UpdateBannerText}"
+                                          VerticalAlignment="Center"
+                                          TextWrapping="Wrap" />
+                            <ui:Button Grid.Column="1"
+                                       Content="Обновить"
+                                       Click="UpdateDriver_Click"
+                                       IsEnabled="{Binding CanUpdate}"
+                                       Margin="12,0,0,0" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Карточка «драйвер не установлен» -->
+                    <StackPanel Margin="0,12,0,0">
+                        <StackPanel.Style>
+                            <Style TargetType="{x:Type StackPanel}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ShowInstallCard}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Text="Драйвер Raw Accel не установлен."
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,8" />
+                        <TextBlock Text="Установка загрузит официальный релиз с GitHub и запустит его installer.exe с правами администратора. Потребуется подтверждение в UAC."
+                                   Opacity="0.6"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,10" />
+                        <ui:Button Content="Установить официальный драйвер"
+                                   HorizontalAlignment="Left"
+                                   Click="InstallDriver_Click"
+                                   IsEnabled="{Binding CanInstall}" />
+                    </StackPanel>
+
+                    <ProgressBar IsIndeterminate="True"
+                                 Height="4"
+                                 Margin="0,12,0,0">
+                        <ProgressBar.Style>
+                            <Style TargetType="{x:Type ProgressBar}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ProgressBar.Style>
+                    </ProgressBar>
+                    <TextBlock Text="{Binding BusyText}"
+                               Opacity="0.7"
+                               Margin="0,6,0,0"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </ui:Card>
+
+            <!-- ===== Кривые и параметры ===== -->
+            <ui:Card Grid.Row="2" Padding="18" Margin="0,0,0,12">
+                <StackPanel>
+                    <ui:TextBlock Text="Кривая отклика" FontSize="18" FontWeight="SemiBold"
+                                  Margin="0,0,0,4" />
+                    <TextBlock Text="Параметры пишутся в официальный settings.json драйвера и применяются через writer.exe."
+                               Opacity="0.6"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,12" />
+
+                    <TextBlock Text="{Binding LoadError}"
+                               Foreground="{DynamicResource ImpactAccentBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,10">
+                        <TextBlock.Style>
+                            <Style TargetType="{x:Type TextBlock}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasLoadError}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <StackPanel IsEnabled="{Binding IsDriverActive}">
+
+                        <!-- Тип кривой -->
+                        <Grid Style="{StaticResource ParamRow}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Тип кривой" VerticalAlignment="Center" />
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding CurveNames}"
+                                      SelectedIndex="{Binding SelectedCurveIndex, Mode=TwoWay}"
+                                      HorizontalAlignment="Left"
+                                      MinWidth="180" />
+                        </Grid>
+
+                        <!-- Множитель чувствительности X -->
+                        <Grid Style="{StaticResource ParamRow}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="90" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Sens Multiplier (X)" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="0.1" Maximum="4.0"
+                                    TickFrequency="0.05" IsSnapToTickEnabled="False"
+                                    Value="{Binding HorizontalSensMultiplier, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding HorizontalSensMultiplier, StringFormat={}{0:0.###}}" />
+                        </Grid>
+
+                        <!-- Множитель чувствительности Y -->
+                        <Grid Style="{StaticResource ParamRow}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="90" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Sens Multiplier (Y)" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="0.1" Maximum="4.0"
+                                    Value="{Binding VerticalSensMultiplier, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding VerticalSensMultiplier, StringFormat={}{0:0.###}}" />
+                        </Grid>
+
+                        <!-- Acceleration -->
+                        <Grid Style="{StaticResource ParamRow}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="90" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Acceleration" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="0.0001" Maximum="0.2"
+                                    Value="{Binding Acceleration, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding Acceleration, StringFormat={}{0:0.####}}" />
+                        </Grid>
+
+                        <!-- Cap: порог -->
+                        <Grid Style="{StaticResource ParamRow}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="90" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Cap (порог)" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="1" Maximum="60"
+                                    Value="{Binding CapSpeed, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding CapSpeed, StringFormat={}{0:0.##}}" />
+                        </Grid>
+
+                        <!-- Cap: усиление после порога -->
+                        <Grid Style="{StaticResource ParamRow}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="90" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Cap (усиление)" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="0.1" Maximum="5"
+                                    Value="{Binding CapGain, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding CapGain, StringFormat={}{0:0.##}}" />
+                        </Grid>
+
+                        <!-- Offset: вход -->
+                        <Grid Style="{StaticResource ParamRow}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="90" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Offset (вход)" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="-10" Maximum="10"
+                                    Value="{Binding InputOffset, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding InputOffset, StringFormat={}{0:0.###}}" />
+                        </Grid>
+
+                        <!-- Offset: выход -->
+                        <Grid Style="{StaticResource ParamRow}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="90" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Offset (выход)" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="-10" Maximum="10"
+                                    Value="{Binding OutputOffset, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding OutputOffset, StringFormat={}{0:0.###}}" />
+                        </Grid>
+
+                        <!-- Power -->
+                        <Grid Style="{StaticResource ParamRow}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="90" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Power" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="0.01" Maximum="1.0"
+                                    Value="{Binding PowerExponent, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding PowerExponent, StringFormat={}{0:0.###}}" />
+                        </Grid>
+
+                        <!-- Snap angle: апстрим валидирует 0..45 -->
+                        <Grid Style="{StaticResource ParamRow}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="90" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Привязка к углам, °" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="0" Maximum="45"
+                                    Value="{Binding SnapAngle, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding SnapAngle, StringFormat={}{0:0}}" />
+                        </Grid>
+
+                        <ui:Button Content="Применить"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,14,0,0"
+                                   Click="Apply_Click"
+                                   IsEnabled="{Binding CanApply}" />
+                    </StackPanel>
+                </StackPanel>
+            </ui:Card>
+
+            <!-- ===== Что именно делает эта вкладка ===== -->
+            <ui:Card Grid.Row="3" Padding="18" Opacity="0.85">
+                <StackPanel>
+                    <ui:TextBlock Text="Как это работает" FontSize="16" FontWeight="SemiBold"
+                                  Margin="0,0,0,6" />
+                    <TextBlock TextWrapping="Wrap" Opacity="0.75"
+                               Text="• Статус берётся из HKLM\SYSTEM\CurrentControlSet\Services\rawaccel и попытки открыть устройство \\.\rawaccel. Проверка не требует прав администратора.&#10;• Файлы драйвера скачиваются с официального релиза RawAccelOfficial/rawaccel и не изменяются — подпись rawaccel.sys проверяется до установки, иначе установка отменяется.&#10;• Настройки пишутся в settings.json рядом с rawaccel.exe. Сам файл ничего не применяет: применение выполняет официальный writer.exe, как описано в документации Raw Accel." />
+                </StackPanel>
+            </ui:Card>
+        </Grid>
+    </ScrollViewer>
+</Page>

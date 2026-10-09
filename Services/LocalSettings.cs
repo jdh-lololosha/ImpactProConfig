@@ -29,6 +29,13 @@ internal sealed class LocalSettings
 
     /// <summary>Индекс выбранного корпуса мыши в MouseSkin.Items (0 = Авто по MID).</summary>
     public int MouseSkinIndex { get; set; }
+
+    /// <summary>
+    /// Папка с распакованным Raw Accel. Апстрим нигде не сохраняет путь
+    /// установки (в реестре его нет), поэтому держим у себя. Пусто — берём
+    /// <see cref="RawAccelService.DefaultInstallDir"/>.
+    /// </summary>
+    public string RawAccelInstallDir { get; set; } = string.Empty;
 }
 
 /// <summary>

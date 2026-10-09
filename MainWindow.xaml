@@ -113,6 +113,14 @@
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem
+                    Content="Акселерация"
+                    Tag="AccelerationPage"
+                    TargetPageType="{x:Type pages:AccelerationPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="ArrowTrending24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem
                     Content="Настройки"
                     Tag="SettingsPage"
                     TargetPageType="{x:Type pages:SettingsPage}">

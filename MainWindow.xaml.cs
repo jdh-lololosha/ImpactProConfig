@@ -179,6 +179,7 @@ public partial class MainWindow : FluentWindow
             startPage = arg[7..].ToLowerInvariant() switch
             {
                 "dpi" => typeof(Pages.DpiPage),
+                "accel" => typeof(Pages.AccelerationPage),
                 "settings" => typeof(Pages.SettingsPage),
                 _ => typeof(Pages.ButtonsPage),
             };
