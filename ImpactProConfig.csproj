@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- Вложенный StructureTest не должен попадать в glob основного проекта
@@ -17,7 +17,7 @@
     <RootNamespace>ImpactProConfig</RootNamespace>
     <AssemblyName>ImpactProConfig</AssemblyName>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <Version>1.2.0</Version>
+    <Version>1.2.1</Version>
     <!-- Портативная сборка обязана быть self-contained: build-portable.ps1 пакует
          publish/ как есть, и без этого флага архив уходит без рантайма .NET —
          приложение не запустится на машине без установленного Desktop Runtime.
@@ -69,3 +69,4 @@
   </Target>
 
 </Project>
+
