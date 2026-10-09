@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="Assets/app-preview.png" alt="ImpactProConfig" width="820" />
+<img src="Assets/screens/01-buttons.png" alt="ImpactProConfig" width="820" />
 
 # ImpactProConfig
 
@@ -16,7 +16,7 @@
 [![Vanguard Safe](https://img.shields.io/badge/Vanguard%20Safe-User%20Mode%20GUI-2EA44F?style=for-the-badge&logo=shield&logoColor=white)](#-vanguard--anti-cheat-safety)
 [![Vibe Coded](https://img.shields.io/badge/%E2%9C%A8_vibe--coded--OpenCode%20%26%20AI-ff69b4?style=for-the-badge&logo=openai&logoColor=white)](#-honest-note-about-vibe-coding)
 [![Release](https://img.shields.io/github/v/release/jdh-lololosha/ImpactProConfig?style=for-the-badge&label=Latest%20Release&color=8A2BE2)](../../releases/latest)
-[![Version](https://img.shields.io/badge/version-1.2.1-blue?style=flat-square)](ImpactProConfig.csproj)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue?style=flat-square)](ImpactProConfig.csproj)
 
 [⬇ Download](../../releases/latest) · [📄 Releases](../../releases) · [🐛 Issues](../../issues) · [💬 Discussions](../../discussions) · [⭐ Star](../../stargazers) · [🍴 Fork](../../network/members)
 
@@ -34,6 +34,7 @@
   - [Connection & Hot-Plug](#-connection--hot-plug)
   - [Battery & OSD](#-battery--osd)
   - [Appearance](#-appearance)
+  - [Motion & feedback](#-motion--feedback)
   - [Raw Accel integration](#-raw-accel-integration)
   - [Install model & updates](#-install-model--updates)
 - [Vanguard & Anti-Cheat Safety](#-vanguard--anti-cheat-safety)
@@ -128,6 +129,8 @@ Numbers are deliberately not invented where I have not measured them. Startup an
 - **Low battery toast** — native Windows notification (WinRT `Windows.UI.Notifications`) below 15%, once per discharge session; state resets above 20% or when the cable goes in.
 - **Live tray icon** — the taskbar icon is drawn in real time: colour-coded charge bar (green / yellow / red) plus a bolt while charging. Hover tooltip: `Impact PRO: [XX]% • Wireless/Wired`. Right-click menu: Open, Profile 1..4, Exit.
 - **Battery telemetry** — discharge history is recorded to `battery_stats.json`, giving a **measured** drain rate in %/h and an estimate like `~12 h active gaming`. Both come from observations, not a lookup table. Until the mouse has actually discharged, the card says more data is needed instead of inventing a number.
+- **History window is switchable** — “Last 24 h” and “Last 7 days” rebuild the graph and recompute the estimate for the same load mode.
+- **Three load modes are estimated separately** — “Active gaming”, “Everyday use”, and “Idle”. These are different polling rates, so the remaining time differs; each card shows its own drain rate, its own remaining time, and its own honest note when the data is still too thin.
 - The OSD hotkey is a `WH_MOUSE_LL` low-level hook, because the vendor protocol does not report physical button presses over the wire. The hook can swallow the event so the click does not also reach the game.
 
 ### 🎨 Appearance
@@ -144,6 +147,18 @@ Five accent palettes, applied live:
 
 Sliders, the active-DPI frame, buttons and the podium glow repaint the moment the palette changes.
 
+### 🎬 Motion & feedback
+
+Every animation runs through `RenderTransform` (translate, scale) and `Opacity`. Both are composited on the GPU without pushing the element onto the software rasteriser, so the motion does not eat frames.
+
+- **Staggered page open** — cards rise from the bottom 25 px with a 50 ms step instead of appearing all at once.
+- **The graph draws itself left to right** over 450 ms — the curve is born in front of you rather than hanging static.
+- **Springy buttons** — a press squeezes to 0.95 over 80 ms, release overshoots through 1.02 and settles at 1.0. The same response on buttons, DPI cards and nav items.
+- **Two-layer aurora under the mouse** — the base layer breathes slowly; the top layer brightens and widens slightly while the cursor is over the body.
+- **OSD arrives with a spring** — scale 0.9 → 1.0 with overshoot, plus a charge pulse while plugged in.
+
+Measured on 60 Hz: 188 frames over 3 s of continuous cascade, average frame 15.9 ms, 66 % of frames landing exactly on the vertical sync, one dropped frame.
+
 ### 🚀 Raw Accel integration
 
 An **Acceleration** tab manages the official Raw Accel driver instead of shipping a fork of it.
@@ -151,8 +166,12 @@ An **Acceleration** tab manages the official Raw Accel driver instead of shippin
 - **Driver status and installed version**, read from the device and the version resource of `rawaccel.exe`.
 - **Update check against the official repository** — `RawAccelOfficial/rawaccel` (`a1xd/rawaccel` redirects there; the final address is used so the check does not depend on the redirect).
 - **The official archive is downloaded byte-for-byte as released and its own `installer.exe` is launched.** Nothing is patched. This is deliberate: `rawaccel.sys` is signed (WHQL/attestation), and any modification would break the signature — a signed vulnerable driver is exactly what makes Windows mark it unsafe.
-- **Curve editor** — curve type, X/Y sens multiplier, acceleration, cap, and exponent. Values are written into the official `settings.json` and applied through the upstream `writer.exe`. Writing `settings.json` alone does nothing: the driver holds its config in memory, so the writer has to run.
+- **Curve editor** — curve type, X/Y sens multiplier, acceleration, cap, exponent, offset. Values are written into the official `settings.json` and applied through the upstream `writer.exe`. Writing `settings.json` alone does nothing: the driver holds its config in memory, so the writer has to run.
+- **All ten parameters are typed, not just sliders** — the field right of each slider takes numbers and expressions, and its bounds match the upstream checks (`rawaccel-validate.hpp`). The fields are dark, matching the window; white boxes would be unreadable on a dark background.
+- **The graph plots the upstream formulas** (`common/accel-*.hpp`), not an approximation, and redraws on every change, so a slider's effect is visible immediately.
+- **Configurable publisher policy** — which publisher and root are expected (`PublisherPolicy`), with an optional mandatory Microsoft chain check. If upstream rotates its certificate, the block can be retuned instead of disabling verification wholesale.
 - Install path is resolved so the official files land where the driver expects them, and the archive layout is preserved.
+- **Log rotates at 5 MB** — diagnostics do not grow without bound on a machine that runs for months.
 
 ### 📦 Install model & updates
 
