@@ -187,9 +187,19 @@ ImpactProConfig — переписан с нуля на **.NET 8 + WPF-UI** (Flu
 
 ## 📸 Скриншоты
 
-| Главное окно (Fluent + Mica) | Акселерация / Raw Accel |
+| Кнопки - назначение действий | Сенсор и DPI |
 |---|---|
-| <img src="Assets/app-preview.png" alt="Главное окно" width="100%" /> | Редактор кривой, статус драйвера, проверка официального обновления |
+| <img src="Assets/screens/01-buttons.png" alt="Вкладка Кнопки: нажмите маркер на корпусе мыши или строку в списке, затем выберите действие" width="100%" /> | <img src="Assets/screens/02-dpi.png" alt="Вкладка Сенсор и DPI: уровни DPI, частота опроса, параметры сенсора" width="100%" /> |
+
+| Батарея - аналитика разряда | Акселерация - редактор кривых Raw Accel |
+|---|---|
+| <img src="Assets/screens/03-battery.png" alt="Вкладка Батарея: история разряда, сеансы зарядки, три режима нагрузки" width="100%" /> | <img src="Assets/screens/04-acceleration.png" alt="Вкладка Акселерация: живой редактор кривой поверх settings.json драйвера" width="100%" /> |
+
+| Настройки | OSD-оверлей |
+|---|---|
+| <img src="Assets/screens/05-settings.png" alt="Вкладка Настройки: спящий режим, синхронизация с донглом, статистика батареи, размещение OSD" width="100%" /> | <img src="Assets/screens/06-osd.png" alt="OSD-оверлей поверх активного окна" width="100%" /> |
+
+Все скриншоты сделаны с поставочной сборки на реальном устройстве.
 
 ---
 
@@ -284,6 +294,7 @@ ImpactProConfig/
 ├─ Updater/                   Сплэш-апдейтер, NativeAOT, PublishAot=true
 ├─ build/                     installer.wxs
 ├─ Assets/                    app.ico, app-preview.png, dev1/2/3.png
+├─ Assets/screens/            скриншоты для README (сняты с поставочной сборки)
 └─ hidusb.dll                 Вендорский транспорт протокола — обязателен в рантайме
 ```
 

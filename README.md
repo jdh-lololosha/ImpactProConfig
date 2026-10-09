@@ -187,9 +187,19 @@ Bottom line: this is configuration software for your own mouse, running at the s
 
 ## 📸 Screens
 
-| Main window (Fluent + Mica) | Acceleration / Raw Accel |
+| Buttons - action mapping | Sensor and DPI |
 |---|---|
-| <img src="Assets/app-preview.png" alt="Main window" width="100%" /> | Curve editor, driver status, official update check |
+| <img src="Assets/screens/01-buttons.png" alt="Buttons tab: click a marker on the mouse or a row, then pick an action" width="100%" /> | <img src="Assets/screens/02-dpi.png" alt="Sensor tab: DPI levels, polling rate, sensor parameters" width="100%" /> |
+
+| Battery - discharge analytics | Acceleration - Raw Accel curve editor |
+|---|---|
+| <img src="Assets/screens/03-battery.png" alt="Battery tab: discharge history, charging runs, three load modes" width="100%" /> | <img src="Assets/screens/04-acceleration.png" alt="Acceleration tab: live curve editor over the driver settings.json" width="100%" /> |
+
+| Settings | OSD overlay |
+|---|---|
+| <img src="Assets/screens/05-settings.png" alt="Settings tab: sleep timer, dongle sync, battery log, OSD placement" width="100%" /> | <img src="Assets/screens/06-osd.png" alt="OSD overlay shown above the active window" width="100%" /> |
+
+All screenshots are from the shipping build, captured on a real device.
 
 ---
 
@@ -284,6 +294,7 @@ ImpactProConfig/
 ├─ Updater/                   Splash updater, NativeAOT, PublishAot=true
 ├─ build/                     installer.wxs
 ├─ Assets/                    app.ico, app-preview.png, dev1/2/3.png
+├─ Assets/screens/            README screenshots (captured from the build)
 └─ hidusb.dll                 Vendor protocol transport — required at runtime
 ```
 
