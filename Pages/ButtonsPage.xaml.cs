@@ -72,28 +72,34 @@ public partial class ButtonsPage : Page
     /// </summary>
     private void MouseGrid_MouseEnter(object sender, MouseEventArgs e)
     {
-        var sb = Application.Current?.FindResource("PodiumCharge") as Storyboard;
-        if (sb != null && PodiumCharge != null)
+        // Ищем через САМ ЭЛЕМЕНТ СТРАНИЦЫ, а не через Application.Current.
+        // PodiumCharge объявлен в Page.Resources, а Application.FindResource
+        // обходит только ресурсы приложения и на страницу не заглядывает: он
+        // БРОСАЛ ResourceReferenceKeyNotFoundException при каждом наведении.
+        // TryFindResource вместо FindResource - потому что FindResource на
+        // отсутствующем ключе исключение и пробрасывает, а здесь ключ в
+        // принципе может не найтись (например, если ресурс переименуют), и
+        // тогда наведение молча ничего не сделает вместо вылета.
+        if (TryFindResource("PodiumCharge") is Storyboard sb && PodiumChargeEllipse != null)
         {
-            // Повторный Begin без Stop перезапускает с текущих значений;
-            // Stop гарантирует, что при быстром уходе-возврате состояние
-            // не останется на середине.
-            sb.Begin(PodiumCharge, HandoffBehavior.SnapshotAndReplace);
+            // Begin без Stop перезапускает анимацию с текущих значений; при
+            // быстром уходе-возврате состояние не застревает на середине.
+            sb.Begin(PodiumChargeEllipse, HandoffBehavior.SnapshotAndReplace);
         }
     }
 
     private void MouseGrid_MouseLeave(object sender, MouseEventArgs e)
     {
-        if (PodiumCharge is null) return;
+        if (PodiumChargeEllipse is null) return;
 
-        PodiumCharge.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(
-            0, PodiumCharge.Opacity, TimeSpan.FromMilliseconds(250))
+        PodiumChargeEllipse.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(
+            0, PodiumChargeEllipse.Opacity, TimeSpan.FromMilliseconds(250))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
             FillBehavior = FillBehavior.HoldEnd,
         });
 
-        if (PodiumCharge.RenderTransform is ScaleTransform st)
+        if (PodiumChargeEllipse.RenderTransform is ScaleTransform st)
         {
             st.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(
                 1, st.ScaleX, TimeSpan.FromMilliseconds(250))

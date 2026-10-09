@@ -7,6 +7,20 @@
     <BackEase x:Key="MotionBackEaseOut" EasingMode="EaseOut" Amplitude="0.25"/>
     <ExponentialEase x:Key="MotionEaseInExpo" EasingMode="EaseIn"/>
 
+    <!-- BackEase с амплитудой 0.35 - по требованию для OSD. Отдельный ресурс,
+         потому что MotionBackEaseOut использует 0.25 и менять его здесь
+         нельзя: он же применяется в других местах.
+
+         ОБЪЯВЛЕН ДО MotionOsdEnter СОЗНАТЕЛЬНО. StaticResource не умеет
+         forward reference: ресурс должен быть определён выше по файлу, чем
+         место использования. При объявлении ниже сториборда парсер его
+         не находил, но падал не сразу - лениво, при первой материализации
+         словаря, то есть ровно в момент показа OSD:
+         XamlParseException "не удается найти ресурс MotionOsdScaleEase",
+         а вызов FindResource("MotionOsdEnter") не был в try/catch, и OSD
+         ронял всё приложение. -->
+    <BackEase x:Key="MotionOsdScaleEase" EasingMode="EaseOut" Amplitude="0.35"/>
+
     <!-- ===== OSD Enter: slide from bottom 30px + fade in, 250ms BackEase ===== -->
     <Storyboard x:Key="MotionOsdEnter">
         <DoubleAnimation Storyboard.TargetProperty="Opacity"
@@ -27,11 +41,6 @@
                          EasingFunction="{StaticResource MotionOsdScaleEase}"/>
     </Storyboard>
 
-    <!-- BackEase с амплитудой 0.35 - по требованию для OSD. Отдельный ресурс,
-         потому что MotionBackEaseOut использует 0.25 и менять его здесь
-         нельзя: он же применяется в других местах. -->
-    <BackEase x:Key="MotionOsdScaleEase" EasingMode="EaseOut" Amplitude="0.35" />
-
     <!-- ===== OSD Exit: fade out + 10px down, 150ms ExponentialEase ===== -->
     <Storyboard x:Key="MotionOsdExit">
         <DoubleAnimation Storyboard.TargetProperty="Opacity"
@@ -51,21 +60,6 @@
                          From="16" To="0" Duration="0:0:0.2"
                          EasingFunction="{StaticResource MotionEaseOutCubic}"/>
     </Storyboard>
-
-    <!-- ===== Пружинящая физика нажатия =====
-         Только RenderTransform и Opacity: оба параметра WPF композитит на
-         GPU, без растеризации элемента.
-
-         Реализовано ПОСЛЕДОВАТЕЛЬНОСТЬЮ ТРИГГЕРОВ, а не наложением анимаций:
-         при IsPressed=true ставим Scale 0.95, при снятии триггер перестаёт
-         действовать и значение возвращается к 1.0. Отскок с перелётом
-         (0.95 -> 1.02 -> 1.0) добавляется анимацией из кода, потому что
-         выразить перелёт значением в триггере нельзя.
-
-         Проверено пробой ДО применения: у ui:Button и ui:NavigationViewItem
-         IsPressed-триггеров в теме НЕТ (есть только Appearance), а подмена
-         RenderTransform на ScaleTransform шаблон не ломает. Поэтому общий
-         стиль безопасен. -->
 
     <!-- Пружины нажатия здесь нет СОЗНАТЕЛЬНО.
 

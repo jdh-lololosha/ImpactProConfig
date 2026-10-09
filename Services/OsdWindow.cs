@@ -97,8 +97,30 @@ internal sealed class OsdWindow : Window
 
         Loaded += (_, _) =>
         {
-            var enterStoryboard = Application.Current.FindResource("MotionOsdEnter") as Storyboard;
-            enterStoryboard?.Begin((FrameworkElement)Content);
+            // TryFindResource, а не FindResource: оверлей - косметика, и он
+            // не имеет права ронять приложение. Раньше здесь стоял
+            // FindResource, который на отсутствующем ключе бросает
+            // ResourceReferenceKeyNotFoundException прямо из обработчика
+            // Loaded, то есть из callback'а рендера. Так и случилось: из-за
+            // битой ссылки на easing в Motion.xaml один вызов OSD убивал
+            // всю программу.
+            if (Application.Current?.TryFindResource("MotionOsdEnter") is Storyboard enter
+                && Content is FrameworkElement content)
+            {
+                try
+                {
+                    enter.Begin(content);
+                }
+                catch (Exception ex)
+                {
+                    // Анимация не прошла - показываем оверлей без неё.
+                    App.Log($"OSD: MotionOsdEnter не применена: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+            else
+            {
+                App.Log("OSD: ресурс MotionOsdEnter не найден, показ без анимации");
+            }
             _holdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250 + _durationMs) };
             _holdTimer.Tick += (_, _) =>
             {
@@ -157,7 +179,7 @@ internal sealed class OsdWindow : Window
         StopTimers();
         try
         {
-            var exitStoryboard = Application.Current.FindResource("MotionOsdExit") as Storyboard;
+            var exitStoryboard = Application.Current?.TryFindResource("MotionOsdExit") as Storyboard;
             exitStoryboard?.Begin((FrameworkElement)Content);
         }
         catch

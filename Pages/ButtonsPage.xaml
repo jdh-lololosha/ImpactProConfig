@@ -218,7 +218,7 @@
                         <!-- Аврора, слой 2: ярче и меньше. Лежит поверх
                              подложки, поэтому при наведении разгорается
                              именно он — базовый продолжает дышать. -->
-                        <Ellipse x:Name="PodiumCharge"
+                        <Ellipse x:Name="PodiumChargeEllipse"
                                  Width="230"
                                  Height="78"
                                  HorizontalAlignment="Center"

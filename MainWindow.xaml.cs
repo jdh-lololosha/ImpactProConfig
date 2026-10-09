@@ -50,9 +50,13 @@ public partial class MainWindow : FluentWindow
         // {x:Type ui:Button}}": разрешение неявного стиля привело бы к самому
         // себе. Обработчики на окне меняют только RenderTransform и не
         // трогают Style вообще.
+        // Только нажатие и отпускание. PreviewMouseMove здесь НЕ нужен и раньше
+        // был причиной дрожи: он приходит на каждое движение мыши, поэтому
+        // отскок перезапускался на элементах, которые никогда не нажимали.
+        // Отпускание мимо кнопки ловит PreviewMouseLeftButtonUp - он
+        // всплывает от окна в любом случае.
         PreviewMouseLeftButtonDown += OnPressDown;
         PreviewMouseLeftButtonUp += OnPressUp;
-        PreviewMouseMove += OnPressCancel;
         LostMouseCapture += OnPressCancel;
         Closing += OnClosing;
 
@@ -309,6 +313,8 @@ public partial class MainWindow : FluentWindow
         if (scale is null)
             return;
 
+        _pressedScale = scale;
+
         // Стартуем от текущего значения, а не от 1.0: если кнопку уже
         // отпустили и тут же нажали снова, прыжка не будет.
         scale.BeginAnimation(ScaleTransform.ScaleXProperty, SpringAnimation(
@@ -319,28 +325,36 @@ public partial class MainWindow : FluentWindow
 
     private void OnPressUp(object sender, MouseButtonEventArgs e)
     {
-        ReleaseSpring(e.OriginalSource as DependencyObject);
+        ReleaseSpring();
     }
 
     /// <summary>
-    /// Уход курсора с кнопки во время нажатия: если мышь отжали мимо кнопки
-    /// или увели за её пределы, нажатие «залипает» на Scale 0.95. Этот
-    /// обработчик возвращает элемент в 1.0.
+    /// Отмена нажатия, когда мышь ушла с кнопки или окно потеряло захват.
+    ///
+    /// Освобождаем ИМЕННО нажатый элемент, а не тот, что под курсором.
+    /// Раньше здесь стоял PreviewMouseMove и ReleaseSpring искал кнопку под
+    /// курсором: событие приходит на каждое движение мыши, поэтому отскок
+    /// 0.95 -> 1.02 запускался на элементах, которые никогда не нажимали, и
+    /// при быстром входе в окно анимация перезапускалась десятки раз в
+    /// секунду - секция дрожала.
     /// </summary>
     private void OnPressCancel(object sender, MouseEventArgs e)
     {
-        if (e is MouseButtonEventArgs mbe)
-            ReleaseSpring(mbe.OriginalSource as DependencyObject);
-        else if (e.OriginalSource is DependencyObject src)
-            ReleaseSpring(src);
+        ReleaseSpring();
     }
 
-    private void ReleaseSpring(DependencyObject? source)
+    /// <summary>
+    /// Возврат нажатой кнопки в 1.0. Ничего не делает, если нажатия не было:
+    /// это и есть защита от повторного запуска отскока на каждом движении
+    /// мыши.
+    /// </summary>
+    private void ReleaseSpring()
     {
-        var button = FindPressTarget(source);
-        var scale = EnsureScale(button);
+        var scale = _pressedScale;
         if (scale is null)
             return;
+
+        _pressedScale = null;
 
         // Перелёт: 0.95 -> 1.02 за 150 мс, затем посадка в 1.0.
         var bounce = SpringAnimation(
@@ -348,27 +362,40 @@ public partial class MainWindow : FluentWindow
             new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.3 });
         bounce.Completed += (_, _) =>
         {
+            // FillBehavior.Stop вместо HoldEnd: анимация должна снять себя с
+            // элемента, иначе кнопка навсегда остаётся «анимируемой» и
+            // следующее нажатие стартует от залипшего состояния.
             scale.BeginAnimation(ScaleTransform.ScaleXProperty, SpringAnimation(
                 ReleaseOvershoot, 1.0, TimeSpan.FromMilliseconds(100),
-                new CubicEase { EasingMode = EasingMode.EaseOut }));
+                new CubicEase { EasingMode = EasingMode.EaseOut }, FillBehavior.Stop));
             scale.BeginAnimation(ScaleTransform.ScaleYProperty, SpringAnimation(
                 ReleaseOvershoot, 1.0, TimeSpan.FromMilliseconds(100),
-                new CubicEase { EasingMode = EasingMode.EaseOut }));
+                new CubicEase { EasingMode = EasingMode.EaseOut }, FillBehavior.Stop));
+            scale.ScaleX = 1.0;
+            scale.ScaleY = 1.0;
         };
 
         scale.BeginAnimation(ScaleTransform.ScaleXProperty, bounce);
         scale.BeginAnimation(ScaleTransform.ScaleYProperty, bounce);
     }
 
+    /// <summary>
+    /// Масштаб нажатой кнопки; null, если нажатия нет. Хранится явно, а не
+    /// ищется по курсору: событие отпускания может прийти с другого
+    /// элемента, и освобождать нужно ту кнопку, которая реально сжата.
+    /// </summary>
+    private ScaleTransform? _pressedScale;
+
     private const double PressScale = 0.95;
     private const double ReleaseOvershoot = 1.02;
 
     private static DoubleAnimation SpringAnimation(
-        double from, double to, TimeSpan duration, IEasingFunction? easing)
+        double from, double to, TimeSpan duration, IEasingFunction? easing,
+        FillBehavior fill = FillBehavior.HoldEnd)
     {
         var anim = new DoubleAnimation(from, to, duration)
         {
-            FillBehavior = FillBehavior.HoldEnd,
+            FillBehavior = fill,
         };
         if (easing is not null)
             anim.EasingFunction = easing;
