@@ -23,7 +23,9 @@
             Ширина 120: значение с шагом 0.0001 (Acceleration) не влезает в
             90, а текст вроде «0.0001» обрезался бы.
         -->
-        <Style x:Key="ParamNumberBox" TargetType="{x:Type ui:NumberBox}">
+        <Style x:Key="ParamNumberBox"
+               TargetType="{x:Type ui:NumberBox}"
+               BasedOn="{StaticResource ImpactNumberBox}">
             <Setter Property="Margin" Value="10,0,0,0" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="AcceptsExpression" Value="True" />

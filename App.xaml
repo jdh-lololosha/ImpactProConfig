@@ -38,6 +38,62 @@
             <SolidColorBrush x:Key="CheckBoxCheckGlyphForeground" Color="#FFFFFF" />
             <SolidColorBrush x:Key="RadioButtonCheckGlyphFill" Color="#FFFFFF" />
 
+            <!-- Поля ввода. В теме WPF-UI они СВЕТЛЫЕ: TextControlBackground =
+                 #B3FFFFFF (70% белого), а в фокусе TextControlBackgroundFocused =
+                 #FFFFFFFF вовсе непрозрачный. На тёмном фоне это даёт белые
+                 прямоугольники, выбивающиеся из оформления. Значения взяты из
+                 реальной темы (ThemesDictionary перечислением ключей), а не
+                 подобраны на глаз; здесь они приведены к нашим токенам
+                 ImpactSurfaceBrush / ImpactStrokeBrush.
+
+                 Переопределение глобальное, а не в стиле страницы: иначе белым
+                 осталось бы любое другое поле ввода приложения. -->
+            <SolidColorBrush x:Key="TextControlBackground" Color="#14FFFFFF" />
+            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#1FFFFFFF" />
+            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#2B2B2B" />
+            <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="#0DFFFFFF" />
+
+            <!-- Рамка и цвет текста полей ввода. -->
+            <SolidColorBrush x:Key="ControlStrokeColorDefault" Color="#4A4A4A" />
+            <SolidColorBrush x:Key="TextControlForeground" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="TextControlForegroundDisabled" Color="#66FFFFFF" />
+            <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#80FFFFFF" />
+            <SolidColorBrush x:Key="TextControlBorderBrush" Color="#4A4A4A" />
+            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#E81123" />
+            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#5A5A5A" />
+
+            <!--
+                Базовый стиль полей ввода. Именованный, а не неявный по типу:
+                неявный стиль по типу НЕ применяется к элементам, у которых
+                задан явный Style (у нас на странице это ParamNumberBox) -
+                явный стиль полностью его заменяет. Поэтому цепочка
+                ParamNumberBox -> BasedOn ImpactNumberBox -> BasedOn
+                неявного стиля WPF-UI, и оформление доходит до всех полей.
+
+                Оформление повторяет наши токены: полупрозрачный тёмный фон,
+                рамка #4A4A4A, белый текст. Цвет текста задан явно, потому что
+                WPF-UI по умолчанию ставит #E4000000 (почти чёрный) - на тёмном
+                фоне нечитаемо.
+
+                Проверено пробой: BasedOn сохраняет исходный ControlTemplate,
+                фон становится #14FFFFFF, размеры из внешнего стиля применяются.
+            -->
+            <Style x:Key="ImpactNumberBox"
+                   TargetType="{x:Type ui:NumberBox}"
+                   BasedOn="{StaticResource {x:Type ui:NumberBox}}">
+                <Setter Property="Background" Value="#14FFFFFF" />
+                <Setter Property="Foreground" Value="#FFFFFF" />
+                <Setter Property="BorderBrush" Value="#4A4A4A" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Padding" Value="8,4" />
+            </Style>
+
+            <!-- Цвет текста внутри поля задаётся в стиле выше: WPF-UI по
+                 умолчанию ставит #E4000000 (почти чёрный), что на тёмном фоне
+                 нечитаемо. -->
+
             <!-- ===== Карточки: своя заливка, обводка #25FFFFFF, радиус 8 ===== -->
             <!-- BasedOn НЕ работает: {x:Type ui:Card} не находится в словарях
                  (стиль Card приходит только через дефолтный стиль сборки), поэтому
