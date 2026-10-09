@@ -16,6 +16,66 @@ internal sealed class RawAccelReleaseInfo
 }
 
 /// <summary>
+/// Тег релиза, который мы фактически установили и записали на диск.
+///
+/// Хранится рядом с распакованным Raw Accel, а не в реестре: апстрим своей
+/// метки не ведёт. Пока файла нет, установленную версию определить нельзя,
+/// и обновление не предлагается — иначе плашка «доступно обновление 1.7.1»
+/// висела бы вечно у пользователя с самой свежей сборкой.
+/// </summary>
+internal static class RawAccelVersionStamp
+{
+    private const string FileName = ".rawaccel-version";
+
+    public static string PathFor(string installDir) =>
+        System.IO.Path.Combine(installDir, FileName);
+
+    /// <summary>Записывает установленный тег. Вызывается только после успешной установки.</summary>
+    public static void Write(string installDir, string tag)
+    {
+        try
+        {
+            System.IO.File.WriteAllText(PathFor(installDir), tag ?? string.Empty);
+        }
+        catch (Exception ex)
+        {
+            App.Log($"RawAccel: version stamp write failed: {ex.GetType().Name}");
+        }
+    }
+
+    /// <summary>Читает установленный тег. Пусто — неизвестно.</summary>
+    public static string Read(string installDir)
+    {
+        try
+        {
+            string p = PathFor(installDir);
+            return System.IO.File.Exists(p)
+                ? System.IO.File.ReadAllText(p).Trim()
+                : string.Empty;
+        }
+        catch (Exception ex)
+        {
+            App.Log($"RawAccel: version stamp read failed: {ex.GetType().Name}");
+            return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Есть ли смысл предлагать обновление.
+    ///
+    /// Нет, если метка неизвестна: мы не знаем, что у пользователя стоит, а
+    /// FileVersion для сравнения с тегом непригоден (см. комментарий в
+    /// RawAccelService.ReadInstalledVersion). Лучше не показать плашку вовсе,
+    /// чем показать её всегда.
+    /// </summary>
+    public static bool ShouldOfferUpdate(string latestTag, string installedTag)
+        => RawAccelUpdateService.TryParseVersion(latestTag, out var l)
+        && !string.IsNullOrWhiteSpace(installedTag)
+        && RawAccelUpdateService.TryParseVersion(installedTag, out var i)
+        && l > i;
+}
+
+/// <summary>
 /// Проверка обновлений Raw Accel по официальному GitHub API.
 ///
 /// ПОЧЕМУ ИМЕННО ТАК: апстрим требует, чтобы в драйвер грузились только
@@ -58,7 +118,14 @@ internal static class RawAccelUpdateService
         return Version.TryParse(s, out version!);
     }
 
-    /// <summary>Есть ли апдейт относительно установленной версии.</summary>
+    /// <summary>
+    /// Есть ли апдейт относительно установленной версии.
+    ///
+    /// ОСТОРОЖНО, метод ненадёжен для сравнения тега GitHub с FileVersion
+    /// бинарников: апстрим патчит тег, не меняя версию в файлах (релиз v1.7.1
+    /// несёт 1.7.0). Для продакшн-проверки используй
+    /// <see cref="RawAccelVersionStamp.ShouldOfferUpdate"/>.
+    /// </summary>
     public static bool IsNewer(string? latest, string? installed)
     {
         if (!TryParseVersion(latest, out var l)) return false;

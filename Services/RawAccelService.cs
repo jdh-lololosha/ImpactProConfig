@@ -120,6 +120,21 @@ internal static class RawAccelService
     /// Версия из файловой версии установленного rawaccel.exe.
     /// Пустая строка — файл не найден или версию прочитать не удалось.
     /// </summary>
+    /// <summary>
+    /// Версия из файловых ресурсов rawaccel.exe.
+    ///
+    /// ВНИМАНИЕ: это НЕ то же самое, что тег релиза на GitHub. В официальном
+    /// релизе v1.7.1 все бинарники несут FileVersion = 1.7.0 (проверено на
+    /// installer.exe, rawaccel.exe, writer.exe, wrapper.dll), потому что апстрим
+    /// патчит тег, не меняя RA_VER_STRING в common/rawaccel-version.h. Поэтому
+    /// 1.7.1 и 1.7.0 — одна и та же сборка, и сравнивать их напрямую нельзя:
+    /// получится ложное «доступно обновление» навсегда.
+    ///
+    /// Отсюда же видно, что надёжного признака «у меня стоит именно этот тег»
+    /// на диске нет. Поэтому обновление предлагается только по явно
+    /// записанной метке версии (RawAccelUpdateService.LastInstalledTag), а не
+    /// по FileVersion.
+    /// </summary>
     public static string ReadInstalledVersion(string installDir)
     {
         try

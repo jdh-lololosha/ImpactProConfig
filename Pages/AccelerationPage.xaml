@@ -2,7 +2,8 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-      Title="Акселерация">
+      Title="Акселерация"
+      xmlns:controls="clr-namespace:ImpactProConfig.Controls">
 
     <Page.Resources>
         <!-- Строка параметра: подпись слева, ползунок в середине, число справа. -->
@@ -159,6 +160,23 @@
                     </TextBlock>
 
                     <StackPanel IsEnabled="{Binding IsDriverActive}">
+
+                        <!-- График кривой. CurveRevision привязан к VM: любое
+                             изменение параметра ниже увеличивает счётчик и
+                             вызывает InvalidateVisual, поэтому перерисовка
+                             синхронна движению ползунка, без таймеров и
+                             диспетчеризации. -->
+                        <Border Margin="0,0,0,14"
+                                Padding="0"
+                                CornerRadius="10"
+                                Background="#0DFFFFFF"
+                                BorderBrush="#1AFFFFFF"
+                                BorderThickness="1"
+                                Height="240">
+                            <controls:CurveChart CurveRevision="{Binding CurveRevision}"
+                                                 MaxSpeed="200"
+                                                 MaxMultiplier="2" />
+                        </Border>
 
                         <!-- Тип кривой -->
                         <Grid Style="{StaticResource ParamRow}">

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Windows.Media;
 using ImpactProConfig.Services;
 
 namespace ImpactProConfig.ViewModels;
@@ -40,6 +41,17 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
     private double _capSpeed = 15.0;
     private double _capGain = 1.5;
     private double _snapAngle;
+
+    /// <summary>
+    /// Версия графика. Инкремент при каждом изменении параметра кривой —
+    /// это единственное, на что подписан CurveChart через
+    /// <see cref="CurveRevision"/>. Так вместо 400 точек через границу
+    /// управления на каждое движение ползунка проходит одно целое.
+    /// </summary>
+    private int _curveRevision;
+
+    /// <summary>Акцентный цвет темы для линии графика.</summary>
+    private Color _curveColor = Color.FromRgb(0xE8, 0x11, 0x23);
 
     private LocalSettings _local;
 
@@ -140,6 +152,91 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
 
     // ---------------- кривые и параметры ----------------
 
+    /// <summary>
+    /// Монотонный счётчик изменений параметров кривой. CurveChart подписан на
+    /// него и перерисовывается по InvalidateVisual — без проброса
+    /// INotifyPropertyChanged на каждый из десяти параметров.
+    /// </summary>
+    public int CurveRevision
+    {
+        get => _curveRevision;
+        private set => Set(ref _curveRevision, value);
+    }
+
+    /// <summary>
+    /// Формула для графика — из текущих значений ползунков.
+    ///
+    /// Возвращается всегда, даже без settings.json и без загруженного
+    /// драйвера: показанный график — это предпросмотр того, что будет
+    /// записано по кнопке «Применить». Возвращать null здесь можно было бы
+    /// только если бы VM не знал текущих значений, но он их знает.
+    /// </summary>
+    public RawAccelCurveEngine.Args? GraphArgs
+    {
+        get
+        {
+            return new RawAccelCurveEngine.Args
+            {
+                Acceleration = _acceleration,
+                InputOffset = _inputOffset,
+                OutputOffset = _outputOffset,
+                ExponentClassic = _exponentClassic,
+                ExponentPower = _powerExponent,
+                CapX = _capSpeed,
+                CapY = _capGain,
+                Gain = _gainVelocity,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Тип кривой для графика. null, когда драйвер не активен: рисовать
+    /// формулу неоткуда, все параметры — заглушки.
+    /// </summary>
+    /// <summary>
+    /// Тип кривой для графика.
+    ///
+    /// Сознательно НЕ зависит от IsDriverActive: формулы считаются локально,
+    /// из значений ползунков, и не требуют ни драйвера, ни settings.json.
+    /// Иначе график оставался бы пустым на машине, где драйвер установлен, но
+    /// ещё не загружен (сервис Start=3 загружается только при следующей
+    /// загрузке Windows) — то есть ровно тогда, когда пользователю и нужно
+    /// видеть форму до применения.
+    /// </summary>
+    public RawAccelCurveMode? GraphMode => MapToEngine(_curve);
+
+    /// <summary>Акцентный цвет темы: график должен совпадать с линиями ползунков.</summary>
+    public Color CurveColor
+    {
+        get => _curveColor;
+        private set => Set(ref _curveColor, value);
+    }
+
+    /// <summary>
+    /// GUI-Linear в апстриме — это classic с exponent_classic = 2, отдельного
+    /// режима "linear" в rawaccel нет (см. Services/RawAccelSettings.SetCurve).
+    /// </summary>
+    private double _exponentClassic = 3.0;
+
+    /// <summary>
+    /// Gain/Velocity — переключатель между ветками LEGACY и GAIN в апстриме
+    /// (accel_args.gain). Берётся из settings.json при загрузке; в графике
+    /// всегда используется GAIN-ветка, как в GUI Raw Accel по умолчанию.
+    /// </summary>
+    private bool _gainVelocity = true;
+
+    /// <summary>
+    /// Соответствие «тип кривой в GUI» -> «режим движка». Linear и Classic
+    /// оба дают classic, но различаются экспонентой (2 против 3).
+    /// </summary>
+    private static RawAccelCurveMode MapToEngine(RawAccelCurve curve) => curve switch
+    {
+        RawAccelCurve.Jump => RawAccelCurveMode.Jump,
+        RawAccelCurve.Natural => RawAccelCurveMode.Natural,
+        RawAccelCurve.Power => RawAccelCurveMode.Power,
+        _ => RawAccelCurveMode.Classic,
+    };
+
     /// <summary>Типы кривых в терминах GUI Raw Accel (Linear в апстриме — classic+exp2).</summary>
     public IReadOnlyList<string> CurveNames { get; } = new[]
     {
@@ -157,7 +254,16 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         {
             if (!Set(ref _curve, value)) return;
             if (_settings != null) _settings.SetCurve(value);
+
+            // Экспонента classic — часть определения кривой: GUI-Linear
+            // это classic+exp2, GUI-Classic это classic+exp3. Держим её
+            // синхронной с типом, иначе график покажет форму, которой
+            // в settings.json нет.
+            _exponentClassic = value == RawAccelCurve.Linear ? 2.0 : 3.0;
             OnPropertyChanged(nameof(SelectedCurveIndex));
+            OnPropertyChanged(nameof(GraphMode));
+            OnPropertyChanged(nameof(GraphArgs));
+            CurveRevision++;
         }
     }
 
@@ -186,37 +292,73 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
     public double Acceleration
     {
         get => _acceleration;
-        set { if (Set(ref _acceleration, value) && _settings != null) _settings.Acceleration = value; }
+        set
+        {
+            if (!Set(ref _acceleration, value)) return;
+            if (_settings != null) _settings.Acceleration = value;
+            OnPropertyChanged(nameof(GraphArgs));
+            CurveRevision++;
+        }
     }
 
     public double InputOffset
     {
         get => _inputOffset;
-        set { if (Set(ref _inputOffset, value) && _settings != null) _settings.InputOffset = value; }
+        set
+        {
+            if (!Set(ref _inputOffset, value)) return;
+            if (_settings != null) _settings.InputOffset = value;
+            OnPropertyChanged(nameof(GraphArgs));
+            CurveRevision++;
+        }
     }
 
     public double OutputOffset
     {
         get => _outputOffset;
-        set { if (Set(ref _outputOffset, value) && _settings != null) _settings.OutputOffset = value; }
+        set
+        {
+            if (!Set(ref _outputOffset, value)) return;
+            if (_settings != null) _settings.OutputOffset = value;
+            OnPropertyChanged(nameof(GraphArgs));
+            CurveRevision++;
+        }
     }
 
     public double PowerExponent
     {
         get => _powerExponent;
-        set { if (Set(ref _powerExponent, value) && _settings != null) _settings.PowerExponent = value; }
+        set
+        {
+            if (!Set(ref _powerExponent, value)) return;
+            if (_settings != null) _settings.PowerExponent = value;
+            OnPropertyChanged(nameof(GraphArgs));
+            CurveRevision++;
+        }
     }
 
     public double CapSpeed
     {
         get => _capSpeed;
-        set { if (Set(ref _capSpeed, value) && _settings != null) _settings.CapSpeed = value; }
+        set
+        {
+            if (!Set(ref _capSpeed, value)) return;
+            if (_settings != null) _settings.CapSpeed = value;
+            OnPropertyChanged(nameof(GraphArgs));
+            CurveRevision++;
+        }
     }
 
     public double CapGain
     {
         get => _capGain;
-        set { if (Set(ref _capGain, value) && _settings != null) _settings.CapGain = value; }
+        set
+        {
+            if (!Set(ref _capGain, value)) return;
+            if (_settings != null) _settings.CapGain = value;
+            OnPropertyChanged(nameof(GraphArgs));
+            CurveRevision++;
+        }
     }
 
     /// <summary>Привязка к углам. Апстрим валидирует диапазон 0..45 градусов.</summary>
@@ -281,6 +423,22 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
 
         OnPropertyChanged(nameof(CanInstall));
         OnPropertyChanged(nameof(CanApply));
+        SyncCurveColorFromTheme();
+        CurveRevision++;
+    }
+
+    /// <summary>
+    /// Цвет линии графика берём из ресурса темы, чтобы он совпадал с
+    /// подсветкой ползунков. Ресурс динамический: тему можно сменить, не
+    /// перезапуская приложение.
+    /// </summary>
+    public void SyncCurveColorFromTheme()
+    {
+        if (System.Windows.Application.Current?.TryFindResource("ImpactAccentColor") is Color c)
+        {
+            CurveColor = c;
+            CurveRevision++;
+        }
     }
 
     private void LoadSettings()
@@ -309,6 +467,11 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         _capGain = loaded.CapGain;
         _snapAngle = loaded.SnapAngle;
 
+        // Экспонента classic и Gain берём из файла: без этого график показал бы
+        // classic+exp3 там, где в settings.json лежит classic+exp2 (GUI-Linear).
+        _exponentClassic = _curve == RawAccelCurve.Linear ? 2.0 : 3.0;
+        _gainVelocity = loaded.GainVelocity;
+
         OnPropertyChanged(nameof(SelectedCurve));
         OnPropertyChanged(nameof(SelectedCurveIndex));
         OnPropertyChanged(nameof(HorizontalSensMultiplier));
@@ -320,6 +483,10 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CapSpeed));
         OnPropertyChanged(nameof(CapGain));
         OnPropertyChanged(nameof(SnapAngle));
+        OnPropertyChanged(nameof(GraphArgs));
+        OnPropertyChanged(nameof(GraphMode));
+        OnPropertyChanged(nameof(CurveColor));
+        CurveRevision++;
     }
 
     /// <summary>Проверка обновлений Raw Accel через официальный GitHub API.</summary>
@@ -329,7 +496,14 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         {
             var info = await RawAccelUpdateService.FetchLatestAsync();
             LatestVersionText = info.Version;
-            UpdateAvailable = RawAccelUpdateService.IsNewer(info.Version, VersionText);
+
+            // Сравниваем тег релиза с меткой, которую мы сами записали при
+            // установке, а НЕ с FileVersion из rawaccel.exe. В официальном
+            // релизе v1.7.1 все бинарники несут 1.7.0, поэтому сравнение с
+            // FileVersion всегда давало «доступно обновление 1.7.1»: плашка
+            // висела бы у пользователя с самой свежей сборкой.
+            string installed = RawAccelVersionStamp.Read(InstallDir);
+            UpdateAvailable = RawAccelVersionStamp.ShouldOfferUpdate(info.TagName, installed);
         }
         catch (Exception ex)
         {
@@ -365,6 +539,12 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
 
             string dir = InstallDir;
             await RawAccelUpdateService.DownloadAndExtractAsync(info, dir, progress);
+
+            // Метку ставим сразу после распаковки, а не после installer.exe:
+            // даже если пользователь отменит UAC, бинарники на диске уже именно
+            // этой версии, и повторно предлагать «обновление» на тот же тег
+            // не надо.
+            RawAccelVersionStamp.Write(dir, info.TagName);
 
             BusyText = "Запускаю официальный установщик. Подтвердите запрос в UAC…";
             if (!RawAccelInstaller.Run(dir, out string err))
