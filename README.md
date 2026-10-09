@@ -1,127 +1,329 @@
-# ARDOR GAMING Impact PRO Config
+<div align="center">
 
-[English](#english) · [Русский](#русский)
+<img src="Assets/app-preview.png" alt="ImpactProConfig" width="820" />
 
-Unofficial configuration utility for the **ARDOR GAMING Impact PRO** gaming mouse — a dark-themed WPF (.NET 8) replacement for the vendor software, with a live OSD overlay and low-battery notifications.
+# ImpactProConfig
 
-[![Vibe-coded with AI](https://img.shields.io/badge/%E2%9C%A8_vibe--coded_with_AI-ff69b4?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/jdh-lololosha/ImpactProConfig)
+### Modern configuration utility for the ARDOR GAMING Impact PRO
 
-> **✨ Vibe-coded with AI.** This project was written with the help of neural networks (OpenCode), under the attentive human guidance and testing on real hardware.
+**PixArt PAW3395 · Wireless F53C / Wired F59A · WPF-UI (Fluent + Mica) · .NET 8**
+
+[🇷🇺 Русский](README_RU.md) · **🇬🇧 English**
+
+[![License](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey?style=for-the-badge&logo=creativecommons&logoColor=333)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://learn.microsoft.com/windows)
+[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/download/dotnet/8.0)
+[![Vanguard Safe](https://img.shields.io/badge/Vanguard%20Safe-User%20Mode%20GUI-2EA44F?style=for-the-badge&logo=shield&logoColor=white)](#-vanguard--anti-cheat-safety)
+[![Vibe Coded](https://img.shields.io/badge/%E2%9C%A8_vibe--coded--OpenCode%20%26%20AI-ff69b4?style=for-the-badge&logo=openai&logoColor=white)](#-honest-note-about-vibe-coding)
+[![Release](https://img.shields.io/github/v/release/jdh-lololosha/ImpactProConfig?style=for-the-badge&label=Latest%20Release&color=8A2BE2)](../../releases/latest)
+[![Version](https://img.shields.io/badge/version-1.2.1-blue?style=flat-square)](ImpactProConfig.csproj)
+
+[⬇ Download](../../releases/latest) · [📄 Releases](../../releases) · [🐛 Issues](../../issues) · [💬 Discussions](../../discussions) · [⭐ Star](../../stargazers) · [🍴 Fork](../../network/members)
+
+</div>
 
 ---
 
-<a name="english"></a>
-## English
+## 📖 Table of Contents
 
-### Features
+- [Why another config tool](#-why-another-config-tool)
+- [Comparison](#-comparison-impactproconfig-vs-vendor-software)
+- [Features](#-features)
+  - [Sensor — PixArt PAW3395](#-sensor--pixart-paw3395)
+  - [Buttons](#-buttons--case)
+  - [Connection & Hot-Plug](#-connection--hot-plug)
+  - [Battery & OSD](#-battery--osd)
+  - [Appearance](#-appearance)
+  - [Raw Accel integration](#-raw-accel-integration)
+  - [Install model & updates](#-install-model--updates)
+- [Vanguard & Anti-Cheat Safety](#-vanguard--anti-cheat-safety)
+- [Screens](#-screens)
+- [Installation](#-installation)
+- [Build from source](#-build-from-source)
+- [Localization status](#-localization-status--honest)
+- [Project structure](#-project-structure)
+- [Disclaimer](#-disclaimer)
+- [License](#-license)
+- [Honest note about vibe coding](#-honest-note-about-vibe-coding)
 
-- **Full device configuration** — DPI levels, report rate, polling, scroll/sensitivity parameters.
-- **Button mapping** — assign any action to each button, including the special **“Show mouse status (OSD)”** action.
-- **OSD overlay** — press an assigned button and a glass-style overlay shows battery %, charge state, connection type (2.4G / Type-C) and estimated runtime.
-- **Low battery toast** — Windows toast notification when the charge drops below 15% (once per discharge session; resets above 20% or when plugged in).
-- **Honest multi-monitor support** — monitors are enumerated via Win32 `EnumDisplayMonitors` / `GetMonitorInfo` (resolution and primary flag included), and the OSD is placed strictly inside the **work area (rcWork)** of the selected monitor.
-- **Import / export** — vendor-format config files (10 428 bytes), plus local JSON profiles.
-- **No flash writes at startup** — the mouse is written to only when you press **Apply**; all other changes are local.
-- **Live battery tray icon** — the taskbar icon is drawn in real time: a colour-coded charge bar (green / yellow / red) with a bolt while charging. Hover tooltip reads `Impact PRO: [XX]% • Wireless/Wired`. Right-click menu: Open, Profile 1..4, Exit.
-- **Battery telemetry** — discharge history is recorded to `battery_stats.json`, giving a measured drain rate in %/h and an estimate like `~12 h active gaming`. Both come from actual observations, not a hardcoded table; until the mouse has discharged, the card says more data is needed.
-- **In-app updates** — a background check against the GitHub Releases API. If a newer tag exists, an InfoBar offers **Download and update**, which fetches the portable `.zip` from the release, unpacks it, replaces the app files and restarts — no installer, no admin rights.
-- **Theme accents** — five accent palettes (Ardor Red, Sakura Pink, Cyberpunk Cyan, Toxic Green, Deep Violet). Sliders, the active-DPI frame, the mouse podium glow and buttons repaint instantly.
-- **Mouse body image** — pick Black / White / Pink, or let **Auto** follow the device's MID. The image on the Buttons tab and the podium glow switch immediately.
-- **Hot-plug cable ↔ receiver** — plugging or unplugging the USB cable switches the active connection in the background without restarting. When both interfaces are present the cable wins (charging + no radio overhead); pulling it falls back to the 2.4G receiver. The status bar reads `Подключено (провод)` / `Подключено (ресивер)`, and 2000/4000 Hz report rates are only offered on cable.
-- **Dark-only UI** with the Ardor red accent (#E81123 / #FF2E2E).
+---
 
-### How "Auto (by MID)" actually works
+## 💡 Why another config tool
 
-The vendor treats `dev1` / `dev2` / `dev3` as **Config.ini slots, not colours**. `Config.ini` holds `DeviceTotal=3` with `[Device1] MID=4`, `[Device2] MID=5`, `[Device3] MID=6`; `FormHomePage` reads the mouse's MID and picks the matching image. There is no MID→colour table anywhere in the vendor files, so Auto maps `MID 4→dev1, 5→dev2, 6→dev3` and logs an unknown MID rather than silently guessing. This app now reads MID from the device (command 16, `CS_UsbServer_ReadCidMid`) — the previous version declared that command but never called it.
+The stock utility that ships with this mouse is a WinForms application from the Windows 7/8 era. It works, but it looks like it, it needs the vendor's own installer layout, and it gives you no feedback about what the mouse is doing right now.
+
+ImpactProConfig is a ground-up rewrite on **.NET 8 + WPF-UI** (Fluent design, Mica backdrop, self-contained single-folder build). It speaks the same vendor HID protocol through the vendor's own `hidusb.dll`, but everything above that transport — UI, hot-plug handling, battery telemetry, OSD, updates — is new code.
+
+**Unofficial.** Not affiliated with, endorsed by, or supported by ARDOR GAMING.
+
+---
+
+## ⚔️ Comparison: ImpactProConfig vs Vendor Software
+
+| | **ImpactProConfig** | **Vendor utility** |
+|---|---|---|
+| **UI framework** | WPF + WPF-UI 3.0.4, Fluent controls, Mica backdrop, live accent theming | WinForms, era-appropriate flat UI, fixed colors |
+| **Look and feel** | 5 accent themes (Ardor Red, Sakura Pink, Cyberpunk Cyan, Toxic Green, Deep Violet), dark | Single fixed skin |
+| **Sensor** | 1–5 active DPI stages, per-stage X/Y value, stage colour and brightness | Same core values, no live preview |
+| **Report rate** | 125 / 250 / 500 / 1000 Hz always; **2000 / 4000 Hz cable-only**, UI greyed out on wireless | Same limits, no explanation why high rates are unavailable |
+| **DPI LED** | Mode (off / constant / breathing), speed 1–5, brightness 1–10 | Same core values |
+| **Buttons** | 6 remappable slots, including the on-board "show OSD" action | Remapping available, no OSD action |
+| **OSD status overlay** | Configurable: battery %, charge state, connection type, estimated runtime, monitor picker, duration 1/2/3/5 s | None |
+| **Hot-plug cable ↔ receiver** | Background switch, cable-priority auto-detect, no restart, status bar reflects the live link | Manual re-selection required |
+| **Battery reporting** | Live tray icon drawn per level (green / yellow / red + ⚡ while charging), hover tooltip, right-click menu | Basic indicator |
+| **Battery telemetry** | `battery_stats.json`: measured drain rate in %/h and runtime estimate from real observations | None |
+| **Low battery alert** | Native Windows toast below 15%, once per discharge, resets above 20% or on plug-in | None |
+| **Sleep timer** | 10 s … 40 min | Same core values |
+| **Body variant** | Black / White / Pink, or Auto by device MID (`MID 4→dev1, 5→dev2, 6→dev3`) | Image swap exists, mapping undocumented |
+| **Raw Accel** | In-app manager: driver status, version, official-release update check, curve editor writing the official `settings.json` | Separate third-party app |
+| **Updates** | In-app splash updater, NativeAOT, ~2 MB, pulls the portable ZIP from GitHub Releases | Manual download |
+| **Install footprint** | Per-user, no admin for the portable build | Vendor installer, own layout |
+| **Source** | Open source, CC BY-NC 4.0 | Closed |
+| **Flash writes** | Only on **Apply**. Nothing else touches the mouse's flash | Not documented |
+
+Numbers are deliberately not invented where I have not measured them. Startup and RAM depend on the machine; what is measurable here is the self-contained build size and the 2 MB updater.
+
+---
+
+## ✨ Features
+
+### 🎯 Sensor — PixArt PAW3395
+
+| Setting | Range / values | Notes |
+|---|---|---|
+| **Active DPI stages** | 1 … 5 | `maxDPI`. Slot count mirrors the device (`DPIMaxGrade=5`). |
+| **Per-stage DPI** | X / Y value + stage index | 8 slot records exist in the device structure; 5 can be active. |
+| **Report rate** | 125 · 250 · 500 · 1000 Hz | Always available. |
+| **Report rate (high)** | 2000 · 4000 Hz | **Wired only.** Controls are disabled on the receiver, with the reason shown inline. |
+| **Lift-off height (LOD)** | 0.7 mm · 1 mm · 2 mm | Device values `3 / 1 / 2`, taken from the vendor language file. |
+| **Sensor power mode** | LP · HP | `sensorPowerSavingModeEnable`. LP lowers the sensor's own power draw. |
+| **Motion Sync** | on / off | `motionSyncEnable`. |
+| **Angle snapping** | on / off | Binds `linearCorrectionEnable`. |
+| **Ripple control** | on / off | Binds `rippleControlEnable`, shown as "movement smoothing". |
+| **Key debounce time** | 0 … 20 ms | Per-press response delay. Vendor default is 8 ms. |
+| **Sleep timer** | 10 s, 30 s, 1, 5, 10, 15, 20, 25, 30, 35, 40 min | Idle time before the sensor sleeps. |
+| **DPI LED** | off / constant / breathing, speed 1–5, brightness 1–10 | Stage colour follows the accent theme. |
+
+### 🖱️ Buttons & case
+
+- **6 remappable buttons**, every physical button included.
+- The on-board action **"Show mouse status (OSD)"** is assignable to any button — that is how the overlay gets summoned without touching the tray.
+- **3 body variants** — Black (`dev1`), White (`dev2`), Pink (`dev3`) — or **Auto (by MID)**.
+- **Auto reads the MID from the device**, command 16 (`CS_UsbServer_ReadCidMid`). The vendor treats `dev1`/`dev2`/`dev3` as *Config.ini slots, not colours*: `DeviceTotal=3` with `[Device1] MID=4`, `[Device2] MID=5`, `[Device3] MID=6`, and `FormHomePage` picks the image whose section matches the MID. There is no MID→colour table anywhere in the vendor files. So Auto maps `4→dev1, 5→dev2, 6→dev3`, and an unknown MID is written to the log rather than silently guessed.
+- The mouse image and the glowing podium repaint instantly on change.
+
+### 🔌 Connection & Hot-Plug
+
+- Device is `VID 3554`, receiver `PID F53C`, cable `PID F59A`.
+- **Plug or unplug the cable and the active link switches in the background.** No restart, no re-scan dialog.
+- When both endpoints are present the **cable wins** — it charges and it takes the radio off the link. Pull it and the app falls back to the receiver.
+- Status bar reads the live link: `Подключено (провод)` / `Подключено (ресивер)`.
+- High report rates are gated on the cable automatically.
+
+### 🔋 Battery & OSD
+
+- **On-screen OSD overlay** showing battery %, charge state, connection type and estimated runtime. Assign it to a mouse button.
+- **Monitor picker** — displays are enumerated through Win32 `EnumDisplayMonitors` / `GetMonitorInfo` with resolution and primary flag, and the overlay is placed strictly inside the **work area (`rcWork`)** of the selected monitor, so it never lands on the taskbar or a reserved strip.
+- **Overlay duration**: 1 / 2 / 3 / 5 s.
+- **Low battery toast** — native Windows notification (WinRT `Windows.UI.Notifications`) below 15%, once per discharge session; state resets above 20% or when the cable goes in.
+- **Live tray icon** — the taskbar icon is drawn in real time: colour-coded charge bar (green / yellow / red) plus a bolt while charging. Hover tooltip: `Impact PRO: [XX]% • Wireless/Wired`. Right-click menu: Open, Profile 1..4, Exit.
+- **Battery telemetry** — discharge history is recorded to `battery_stats.json`, giving a **measured** drain rate in %/h and an estimate like `~12 h active gaming`. Both come from observations, not a lookup table. Until the mouse has actually discharged, the card says more data is needed instead of inventing a number.
+- The OSD hotkey is a `WH_MOUSE_LL` low-level hook, because the vendor protocol does not report physical button presses over the wire. The hook can swallow the event so the click does not also reach the game.
+
+### 🎨 Appearance
+
+Five accent palettes, applied live:
+
+| Theme | Hex |
+|---|---|
+| **Ardor Red** (default) | `#E81123` / `#FF2E2E` |
+| **Sakura Pink** | `#F28CB4` |
+| **Cyberpunk Cyan** | `#00E0E6` |
+| **Toxic Green** | `#4FD63B` |
+| **Deep Violet** | `#9B6BF5` |
+
+Sliders, the active-DPI frame, buttons and the podium glow repaint the moment the palette changes.
+
+### 🚀 Raw Accel integration
+
+An **Acceleration** tab manages the official Raw Accel driver instead of shipping a fork of it.
+
+- **Driver status and installed version**, read from the device and the version resource of `rawaccel.exe`.
+- **Update check against the official repository** — `RawAccelOfficial/rawaccel` (`a1xd/rawaccel` redirects there; the final address is used so the check does not depend on the redirect).
+- **The official archive is downloaded byte-for-byte as released and its own `installer.exe` is launched.** Nothing is patched. This is deliberate: `rawaccel.sys` is signed (WHQL/attestation), and any modification would break the signature — a signed vulnerable driver is exactly what makes Windows mark it unsafe.
+- **Curve editor** — curve type, X/Y sens multiplier, acceleration, cap, and exponent. Values are written into the official `settings.json` and applied through the upstream `writer.exe`. Writing `settings.json` alone does nothing: the driver holds its config in memory, so the writer has to run.
+- Install path is resolved so the official files land where the driver expects them, and the archive layout is preserved.
+
+### 📦 Install model & updates
+
+- **Per-user install**, same idea as Discord or Telegram: binaries in `%LOCALAPPDATA%\Programs`, user data in `%LOCALAPPDATA%\ImpactProConfig`. **Zero UAC prompts, zero admin rights** for the portable build.
+- **Splash updater in the Discord style** — a separate `Updater.exe` published with `PublishAot=true` and `InvariantGlobalization=true`, **2 140 160 bytes (~2 MB)** on disk. A running executable cannot be overwritten, hence a second process.
+- The app polls the GitHub Releases API in the background. A newer tag raises an InfoBar with **Download and update**: fetch the portable `.zip`, unpack it over the app folder, restart. No installer, no admin.
+- The **MSI** route (`build-msi.ps1`) is a per-user install into `%LOCALAPPDATA%\Programs\ImpactProConfig`.
+
+---
+
+## 🛡️ Vanguard & Anti-Cheat Safety
+
+This deserves a plain, factual explanation rather than a badge.
+
+**ImpactProConfig is an ordinary user-mode GUI.** It runs as a normal Windows desktop application, in the same session as Explorer. It opens the mouse HID transport, sends vendor protocol commands, and draws windows. That is the whole of its privilege footprint.
+
+Concretely, what this project does **not** do:
+
+- It ships **no kernel driver**. There is no `.sys` file in this repository, no service registration, no kernel IOCTL of its own.
+- It does **not** read or write another process's memory. No `WriteProcessMemory`, no `ReadProcessMemory`, no remote thread creation, no `CreateRemoteThread`, no APC injection.
+- It does **not** inject code into any game process, and does **not** attach a debugger.
+- It does **not** spoof, hook, or tamper with Riot, Vanguard, or any other anti-cheat, and does **not** attempt to hide from them.
+- It does **not** touch the mouse driver stack to fake input. It configures the mouse *through the mouse's own vendor protocol* — the same channel the official software uses. Whatever the mouse physically does, the firmware does.
+
+**About the Raw Accel tab:** Raw Accel is a **separate, upstream, Microsoft-signed driver**, not something this project ships or modifies. It is installed only if you ask for it, from the official release, using the official installer, and the app explicitly refuses to patch any release file so the signature stays valid. Whether you want it installed at all is your call — every core feature of ImpactProConfig works with no kernel driver present.
+
+A low-level mouse hook (`WH_MOUSE_LL`) is used solely to notice the button you assigned to the OSD and to optionally consume that one click. It is a documented Win32 input hook running inside your own user session; it is not an injection.
+
+Bottom line: this is configuration software for your own mouse, running at the same privilege level as Notepad. Treat it accordingly, and read the [disclaimer](#-disclaimer).
+
+---
+
+## 📸 Screens
+
+| Main window (Fluent + Mica) | Acceleration / Raw Accel |
+|---|---|
+| <img src="Assets/app-preview.png" alt="Main window" width="100%" /> | Curve editor, driver status, official update check |
+
+---
+
+## 📥 Installation
+
+**Portable (recommended)**
+
+1. Download the newest `ImpactProConfig-v<Version>-Portable.zip` from the [Releases](../../releases) page.
+2. Extract it to any folder you own — a Desktop folder, a USB stick, `D:\Tools`. No admin rights, nothing written to `Program Files`, nothing written to the registry.
+3. Run `ImpactProConfig.exe`.
+
+> `hidusb.dll` — the vendor protocol transport — ships next to the executable. **Keep the two together.** The application will not start the protocol without it. The in-app updater replaces both automatically.
+
+**MSI, if you prefer a registered install**
+
+`ImpactProConfig-v<Version>-Setup.msi` from the same page. It is a **per-user** install to `%LOCALAPPDATA%\Programs\ImpactProConfig` and does not request elevation.
 
 ### Requirements
 
 - Windows 10 (1809 / build 17763) or later, x64
-- [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (included in the self-contained build)
-- ARDOR GAMING Impact PRO mouse (2.4G receiver or USB Type-C)
-
-### Installation
-
-Download **ImpactProConfig-v1.2.0-Portable.zip** from the [Releases](../../releases) page and extract it anywhere (a folder of your choice — no admin rights, nothing is written to `Program Files` or the registry). Run `ImpactProConfig.exe`.
-
-`hidusb.dll` (the protocol transport library) ships next to the executable — keep them together, the application will not work without it. The in-app updater replaces the files in that folder automatically.
-
-### Build from source
-
-```powershell
-git clone https://github.com/jdh-lololosha/ImpactProConfig.git
-cd ImpactProConfig
-
-# Portable release: self-contained publish (the flag lives in the csproj),
-# then pack it into ImpactProConfig-v<Version>-Portable.zip
-dotnet publish -c Release -r win-x64 -o publish
-.\build-portable.ps1
-```
-
-### Disclaimer
-
-This is third-party software. It communicates with the mouse through the same HID protocol used by the official driver; use it at your own risk.
-
-### License
-
-[CC BY-NC 4.0 International](LICENSE) — free for non-commercial use with attribution.
+- ARDOR GAMING Impact PRO, on the 2.4 GHz receiver (F53C) or USB Type-C cable (F59A)
+- No .NET install needed — the release is self-contained. Building from source needs the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 
 ---
 
-<a name="русский"></a>
-## Русский
-
-> **✨ Навайбкожено при помощи нейросетей (OpenCode)** под чутким человеческим руководством и тестированием на реальном железе.
-
-### Возможности
-
-- **Полная настройка мыши** — уровни DPI, частота опроса, параметры прокрутки и чувствительности.
-- **Назначение кнопок** — любое действие для каждой кнопки, включая отдельное действие **«Показать статус мыши (OSD)»**.
-- **OSD-оверлей** — нажимаете назначенную кнопку, и на экране появляется тёмное стеклянное окно со статусом: заряд %, режим работы (заряжается / от батареи), тип подключения (2.4G / Type-C) и оценка времени работы.
-- **Уведомление о низком заряде** — всплывающее уведомление Windows при заряде ниже 15% (один раз за разряд; сброс выше 20% или при подключении кабеля).
-- **Честная работа с мониторами** — перечисление через Win32 `EnumDisplayMonitors` / `GetMonitorInfo` (с разрешением и флагом основного), OSD размещается строго в **рабочей области (rcWork)** выбранного монитора.
-- **Импорт / экспорт** — конфиги формата официалки (10 428 байт) и локальные JSON-профили.
-- **Нет записи во флеш при запуске** — мышь записывается только по кнопке **«Применить»**, всё остальное хранится локально.
-- **Живая иконка батареи в трее** — значок рисуется в реальном времени: цветная полоска заряда (зелёный / жёлтый / красный) и знак ⚡ при зарядке. Подсказка при наведении: `Impact PRO: [XX]% • Беспроводной/Провод`. Меню трея: Открыть, Профиль 1..4, Выход.
-- **Телеметрия батареи** — история разряда пишется в `battery_stats.json`, из неё считается реальная скорость расхода (%/ч) и оценка вида «~12 ч активной игры». Цифры берутся из наблюдений, а не из таблицы: пока мышь не разряжалась, карточка честно пишет «нужно больше данных».
-- **Обновление внутри приложения** — фоновая проверка через GitHub Releases API. Если тег новее текущей версии, внизу окна появляется плашка **«Скачать и обновить»**: она качает портативный `.zip` из релиза, распаковывает, заменяет файлы и перезапускает приложение — без установщика и без прав админа.
-- **Цветовые темы** — пять акцентных палитр (Ardor Red, Sakura Pink, Cyberpunk Cyan, Toxic Green, Deep Violet). Слайдеры, рамка активного DPI, подиум и кнопки перекрашиваются мгновенно.
-- **Образ корпуса мыши** — выбор Чёрный / Белый / Розовый либо **Авто** по MID устройства. Картинка на вкладке «Кнопки» и свечение подиума меняются сразу.
-- **Хот-плаг провод ↔ ресивер** — вставка или извлечение кабеля переключает активное подключение в фоне, без перезапуска. Если доступны оба интерфейса, приоритет у кабеля (зарядка и нет нагрузки на радиоканал); выдернули — приложение уходит на ресивер 2.4G. В статус-баре: «Подключено (провод)» / «Подключено (ресивер)», частоты 2000/4000 Гц доступны только на проводе.
-- **Тёмная тема** с акцентом Ardor red (#E81123 / #FF2E2E).
-
-### Как на самом деле работает «Авто (по MID)»
-
-У вендора `dev1` / `dev2` / `dev3` — это **слоты Config.ini, а не цвета**. В `Config.ini` записано `DeviceTotal=3` и секции `[Device1] MID=4`, `[Device2] MID=5`, `[Device3] MID=6`; `FormHomePage` читает MID мыши и берёт картинку по совпадению. Таблицы MID→цвет в файлах вендора нет нигде, поэтому «Авто» сопоставляет `MID 4→dev1, 5→dev2, 6→dev3`, а неизвестный MID пишет в лог, а не молча подменяет картинку. Эта версия научилась читать MID с устройства (команда 16, `CS_UsbServer_ReadCidMid`) — в предыдущей команда была объявлена, но ни разу не вызывалась.
-
-### Требования
-
-- Windows 10 (1809 / сборка 17763) или новее, x64
-- [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (включена в self-contained сборку)
-- Мышь ARDOR GAMING Impact PRO (приёмник 2.4G или кабель USB Type-C)
-
-### Установка
-
-Скачайте **ImpactProConfig-v1.2.0-Portable.zip** со страницы [Releases](../../releases) и распакуйте в любую папку (на ваш выбор — права админа не нужны, ничего не пишется в `Program Files` и реестр). Запустите `ImpactProConfig.exe`.
-
-`hidusb.dll` (библиотека протокола) лежит рядом с exe — не разделяйте их, без неё приложение работать не будет. Встроенное обновление само заменит файлы в этой папке.
-
-### Сборка из исходников
+## 🛠️ Build from source
 
 ```powershell
 git clone https://github.com/jdh-lololosha/ImpactProConfig.git
 cd ImpactProConfig
 
-# Портативный релиз: publish в self-contained (флаг задан в csproj),
-# затем паковка в ImpactProConfig-v<Version>-Portable.zip
+# Self-contained publish. SelfContained=true lives in the csproj, not on the
+# command line — pass it by hand and the release ships without the .NET runtime.
 dotnet publish -c Release -r win-x64 -o publish
+
+# Pack publish\ into ImpactProConfig-v<Version>-Portable.zip and verify the
+# updater binary is present.
 .\build-portable.ps1
 ```
 
-### Отказ от ответственности
+Other scripts:
 
-Это стороннее программное обеспечение. Оно общается с мышью по тому же HID-протоколу, что и официальный драйвер; используйте на свой страх и риск.
+| Script | Output |
+|---|---|
+| `.\build-portable.ps1` | Portable ZIP |
+| `.\build-msi.ps1` | Per-user MSI + `installer.wxs` |
+| `.\build-installer.ps1` | Installer artefacts |
+| `.\create-release.ps1` | Tag + GitHub release upload |
 
-### Лицензия
+**Note on layout:** `StructureTest` and `Updater` are nested projects and are explicitly excluded from the main project's glob (`DefaultItemExcludes`), otherwise their generated `AssemblyInfo.cs` breaks the WPF temp build with `CS0579`.
 
-[CC BY-NC 4.0 International](LICENSE) — свободно для некоммерческого использования с указанием авторства.
+---
+
+## 🌍 Localization status — honest
+
+**There is no localization system in the project right now.** The UI strings are hardcoded Russian in the XAML and in `MainViewModel` — for example `SensorModeOptions = { "LP", "HP" }`, `LodOptions = { "0.7 мм", "1 мм", "2 мм" }`, `SleepOptions = { "10 сек.", … }`.
+
+A `Languages/*.json` layer has been designed for and is not implemented yet. So this section describes the target format, and **the README does not pretend otherwise**:
+
+```jsonc
+// Languages/en.json
+{
+  "Dpi.Levels":          "Active DPI stages",
+  "Sensor.LiftOff":      "Lift-off height (LOD)",
+  "Sensor.PowerMode":    "Sensor power mode",
+  "Buttons.Debounce":    "Key debounce time",
+  "Battery.LowAlert":    "Notify on low battery",
+  "Tray.Open":           "Open"
+}
+```
+
+Anyone who wants to build it: extract every literal from `Pages/*.xaml` and the `*Options` arrays in `ViewModels/MainViewModel.cs`, key them, load on startup, and rebind. Contributions welcome.
+
+---
+
+## 🗂️ Project structure
+
+```
+ImpactProConfig/
+├─ App.xaml(.cs)              Entry point, %LOCALAPPDATA%\ImpactProConfig, crash.log rotation
+├─ MainWindow.xaml(.cs)       Mica shell, nav, update InfoBar
+├─ PairingDialog.xaml(.cs)    Receiver pairing
+├─ Driver/                    HID transport, protocol, marshalled structs
+│  ├─ HidUsbNative.cs         P/Invoke into hidusb.dll
+│  ├─ DeviceSession.cs        VID 3554, PID F53C/F59A, hot-plug arbitration
+│  ├─ Protocol.cs             Command / report-rate enums
+│  └─ Structures.cs           MouseConfig, DPIConfig, KeyFunMap, MacroContext — 1:1 with the vendor layout
+├─ Services/                  OSD, tray, toast, themes, battery, updates, Raw Accel
+├─ Pages/                     Dpi · Buttons · Acceleration · Settings
+├─ ViewModels/                MainViewModel (~2100 lines), AccelerationViewModel
+├─ Styles/Motion.xaml         Transitions
+├─ Updater/                   Splash updater, NativeAOT, PublishAot=true
+├─ build/                     installer.wxs
+├─ Assets/                    app.ico, app-preview.png, dev1/2/3.png
+└─ hidusb.dll                 Vendor protocol transport — required at runtime
+```
+
+Structures in `Driver/Structures.cs` are copied **1:1 from the decompiled vendor DriverLib**, `LayoutKind.Sequential`, sizes left to `Marshal`.
+
+---
+
+## ⚠️ Disclaimer
+
+This is **unofficial, third-party software**. It is not affiliated with, endorsed by, sponsored by, or supported by ARDOR GAMING. It talks to the mouse over the same HID protocol as the official software, using the vendor's own `hidusb.dll`, and it is **not** an official release channel for firmware. Use it at your own risk. Keep a backup of your configuration via **Export** before applying anything. If your mouse misbehaves, power-cycle it and re-apply from the app; the device stores what you last wrote.
+
+---
+
+## 📄 License
+
+**Creative Commons Attribution-NonCommercial 4.0 International — [CC BY-NC 4.0](LICENSE)**
+
+Free to use, modify and share with attribution, **for non-commercial purposes only**. Commercial use is not permitted under this license.
+
+---
+
+## ✨ Honest note about vibe coding
+
+This project was **vibe-coded with neural networks** ([OpenCode](https://opencode.ai)) under attentive human guidance, on real hardware, with real bug reports driving the fixes.
+
+What that means in practice:
+
+- The code is real, builds, runs, and was tested against an actual Impact PRO.
+- **Comments explain *why*, not *what*,** because the reason is the hard part. Many of them record a mistake that already happened — a protocol command that was declared but never called, a settings file that gets written but never applied, a data directory that silently failed to open.
+- Numbers come from measurement or from the decompiled vendor code, not from plausible guesses. Where a value is not known, the UI says it does not know.
+- **You still need to read it.** An AI-written codebase is not automatically a reviewed one. Verify before you trust it with anything that matters.
+
+The maintainer takes responsibility for the code. The blame is shared with the tooling.
+
+---
+
+<div align="center">
+
+**Made for people whose mouse deserves better than a 2012 WinForms dialog.**
+
+[🇷🇺 Русский](README_RU.md) · [🇬🇧 English](README.md)
+
+</div>
