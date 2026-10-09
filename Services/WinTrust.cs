@@ -43,34 +43,133 @@ internal enum VerifyState
 internal static class WinTrust
 {
     /// <summary>
-    /// Корни Microsoft, которым допускается подписывать драйверы.
-    /// Цепочка WHCP заканчивается одним из них.
+    /// Правила проверки издателя. Вынесены в отдельный тип и в отдельные методы
+    /// намеренно: издатель подписи у WHCP-драйверов меняется от версии к версии
+    /// (сейчас v1.7.1 подписан «Microsoft Windows Third Party Component CA 2014»
+    /// и «Windows Hardware Compatibility Publisher», но при новом релизе это
+    /// может быть другой CA и другое имя подписи). Захардкоженные строки внутри
+    /// VerifyDriver заставили бы править логику проверки подписи при каждом
+    /// обновлении драйвера — и легко испортить её, забыв про новый издатель.
+    ///
+    /// Правила проверяются как «список допустимых маркеров», а не как точное
+    /// равенство: и Subject, и Issuer у сертификатов Microsoft длинные и
+    /// различаются между релизами.
     /// </summary>
-    private static readonly string[] AllowedRootMarkers =
+    /// <param name="AllowedSubjectMarkers">
+    /// Допустимые значения Subject сертификата подписи. Пустая коллекция —
+    /// Subject не проверяется (только цепочка и Issuer).
+    /// </param>
+    /// <param name="AllowedIssuerMarkers">
+    /// Допустимые значения Issuer сертификата подписи.
+    /// </param>
+    /// <param name="AllowedRootMarkers">
+    /// Допустимые корни цепочки. Пустая коллекция — корень не проверяется.
+    /// </param>
+    /// <param name="RequireMicrosoftChain">
+    /// Требовать, чтобы корень цепочки принадлежал Microsoft. При false
+    /// корнем может быть любой доверенный центр.
+    /// </param>
+    internal sealed record PublisherPolicy(
+        IReadOnlyList<string> AllowedSubjectMarkers,
+        IReadOnlyList<string> AllowedIssuerMarkers,
+        IReadOnlyList<string> AllowedRootMarkers,
+        bool RequireMicrosoftChain);
+
+    /// <summary>
+    /// Политика по умолчанию для драйвера Raw Accel: издатель должен быть
+    /// связан с Microsoft, цепочка обязана дойти до корня Microsoft.
+    /// </summary>
+    internal static PublisherPolicy DefaultDriverPolicy { get; } = new(
+        AllowedSubjectMarkers: new[]
+        {
+            // WHCP: текущий издатель апстрима.
+            "Microsoft Windows Hardware Compatibility Publisher",
+            // Возможные имена при смене партнёрской программы подписи.
+            "Microsoft Windows Hardware Publisher",
+            "Microsoft Windows Hardware",
+        },
+        AllowedIssuerMarkers: new[]
+        {
+            // Текущий CA апстрима.
+            "Microsoft Windows Third Party Component CA 2014",
+            // Ротация CA Microsoft: у новых сертификатов будет другой промежуточный.
+            "Microsoft Windows Third Party Component CA",
+            "Microsoft Windows Production PCA",
+            "Microsoft Code Signing PCA",
+        },
+        AllowedRootMarkers: new[]
+        {
+            "Microsoft Windows Production PCA",
+            "Microsoft Root Certificate Authority",
+            "Microsoft Code Signing PCA",
+            "Microsoft Windows Third Party Component",
+        },
+        RequireMicrosoftChain: true);
+
+    /// <summary>
+    /// Проверяет, что издатель сертификата соответствует политике.
+    /// Отдельный метод, чтобы правила читались и менялись независимо от
+    /// построения цепочки.
+    /// </summary>
+    internal static bool IsExpectedPublisher(X509Certificate2 cert, PublisherPolicy policy)
     {
-        "Microsoft Windows Third Party Component CA 2014",
-        "Microsoft Windows Production PCA",
-        "Microsoft Code Signing PCA",
-        "Microsoft Root Certificate Authority",
-    };
+        // Issuer обязателен всегда: именно он связывает подпись с Microsoft.
+        // Без этой проверки файл, подписанный любым другим доверенным издателем,
+        // прошёл бы проверку ничем не отличаясь от драйвера.
+        if (policy.AllowedIssuerMarkers.Count > 0
+            && !MatchesAny(cert.Issuer, policy.AllowedIssuerMarkers))
+        {
+            App.Log($"RawAccel: unexpected signer issuer: {cert.Issuer}");
+            return false;
+        }
+
+        if (policy.AllowedSubjectMarkers.Count > 0
+            && !MatchesAny(cert.Subject, policy.AllowedSubjectMarkers))
+        {
+            App.Log($"RawAccel: unexpected signer subject: {cert.Subject}");
+            return false;
+        }
+
+        return true;
+    }
 
     /// <summary>
-    /// Издатель сертификата подписи драйвера Raw Accel.
-    /// Проверяем именно его: без этого файл, подписанный любым другим
-    /// доверенным издателем, прошёл бы проверку ничем не отличаясь от драйвера.
+    /// Проверяет корень построенной цепочки. При <see cref="PublisherPolicy.RequireMicrosoftChain"/>
+    /// корень обязан быть корнем Microsoft — иначе цепочка, построенная до
+    /// стороннего CA, прошла бы проверку.
     /// </summary>
-    private const string RequiredIssuerMarker =
-        "Microsoft Windows Third Party Component CA 2014";
+    internal static bool IsExpectedRoot(string rootSubject, PublisherPolicy policy)
+    {
+        if (!policy.RequireMicrosoftChain) return true;
+        if (policy.AllowedRootMarkers.Count == 0) return false;
 
-    /// <summary>Имя подписи, которую мы ожидаем у rawaccel.sys.</summary>
-    private const string RequiredSubjectMarker =
-        "Microsoft Windows Hardware Compatibility Publisher";
+        bool ok = MatchesAny(rootSubject, policy.AllowedRootMarkers);
+        if (!ok)
+            App.Log($"RawAccel: unexpected chain root: {rootSubject}");
+        return ok;
+    }
+
+    /// <summary>Совпадение строки с одним из маркеров, без учёта регистра.</summary>
+    private static bool MatchesAny(string value, IReadOnlyList<string> markers)
+    {
+        foreach (var m in markers)
+            if (value.Contains(m, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
 
     /// <summary>
-    /// Проверяет файл. Бросает <see cref="VerifyState.Invalid"/> не через
-    /// исключение: вызывающему нужен факт, а не стек-трейс.
+    /// Проверяет файл по умолчанию для драйвера.
     /// </summary>
     public static VerifyState VerifyDriver(string filePath)
+        => VerifyDriver(filePath, DefaultDriverPolicy);
+
+    /// <summary>
+    /// Проверяет файл по заданной политике издателя. Бросает
+    /// <see cref="VerifyState.Invalid"/> не через исключение: вызывающему
+    /// нужен факт, а не стек-трейс.
+    /// </summary>
+    public static VerifyState VerifyDriver(string filePath, PublisherPolicy policy)
     {
         if (!File.Exists(filePath)) return VerifyState.Error;
 
@@ -88,17 +187,8 @@ internal static class WinTrust
 
         using (cert)
         {
-            if (!cert.Issuer.Contains(RequiredIssuerMarker, StringComparison.OrdinalIgnoreCase))
-            {
-                App.Log($"RawAccel: unexpected signer issuer: {cert.Issuer}");
+            if (!IsExpectedPublisher(cert, policy))
                 return VerifyState.Invalid;
-            }
-
-            if (!cert.Subject.Contains(RequiredSubjectMarker, StringComparison.OrdinalIgnoreCase))
-            {
-                App.Log($"RawAccel: unexpected signer subject: {cert.Subject}");
-                return VerifyState.Invalid;
-            }
 
             // Цепочка строим без проверки отзыва: у WHCP-драйверов она
             // проверяется по специальному хранилищу драйверов, а в пользовательском
@@ -130,7 +220,7 @@ internal static class WinTrust
                 ? chain.ChainElements[^1].Certificate.Subject
                 : string.Empty;
 
-            bool rootOk = AllowedRootMarkers.Any(m => root.Contains(m, StringComparison.OrdinalIgnoreCase));
+            bool rootOk = IsExpectedRoot(root, policy);
 
             // Просрочка — единственная допустимая претензия. Любая другая
             // (UntrustedRoot, RevocationStatusUnknown, NotSignatureValid)

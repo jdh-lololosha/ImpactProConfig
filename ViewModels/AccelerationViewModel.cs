@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using ImpactProConfig.Services;
 
@@ -227,10 +228,34 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
 
     // ---------------- логика ----------------
 
-    private string InstallDir =>
-        string.IsNullOrWhiteSpace(_local.RawAccelInstallDir)
-            ? RawAccelService.DefaultInstallDir
-            : _local.RawAccelInstallDir;
+    private string InstallDir
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(_local.RawAccelInstallDir))
+                return _local.RawAccelInstallDir;
+
+            // Основной путь: распакованный Raw Accel едет в portable-сборке
+            // рядом с exe (build-portable.ps1 кладёт его в Drivers\RawAccel),
+            // поэтому установка не требует первого выхода в интернет.
+            string bundled = BundledRawAccelDir();
+            if (RawAccelService.IsUnpacked(bundled)) return bundled;
+
+            // Фолбэк: пользователь ставил драйвер раньше сам. Забираем его
+            // папку, там лежит его settings.json — подхватить надо именно его,
+            // иначе настройки применятся не к тому экземпляру.
+            string user = RawAccelService.DefaultInstallDir;
+            return RawAccelService.IsUnpacked(user) ? user : bundled;
+        }
+    }
+
+    /// <summary>
+    /// Drivers\RawAccel рядом с exe. AppContext.BaseDirectory, а не App.DataDir:
+    /// бинарники программы живут в %LOCALAPPDATA%\Programs\ImpactProConfig,
+    /// а данные (настройки, логи) — в %LOCALAPPDATA%\ImpactProConfig.
+    /// </summary>
+    private static string BundledRawAccelDir() =>
+        Path.Combine(AppContext.BaseDirectory, "Drivers", "RawAccel");
 
     /// <summary>
     /// Определение состояния драйвера и загрузка settings.json.
