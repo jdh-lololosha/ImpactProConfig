@@ -507,7 +507,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             ? c
             : Color.FromRgb(0xE8, 0x11, 0x23);
 
-    /// <summary>Версия приложения из сборки, напр. "v1.3.0".</summary>
+    /// <summary>
+    /// Версия приложения из сборки, напр. "v1.3.1".
+    /// Берётся из FileVersion загруженной сборки, а не из константы: иначе
+    /// бамп версии в csproj забывался бы здесь и в Настройках показывалась
+    /// бы старая.
+    /// </summary>
     public string AppVersionText =>
         "v" + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3)
                ?? "0.0.0");

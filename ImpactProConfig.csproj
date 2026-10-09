@@ -17,7 +17,7 @@
     <RootNamespace>ImpactProConfig</RootNamespace>
     <AssemblyName>ImpactProConfig</AssemblyName>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <Version>1.3.0</Version>
+    <Version>1.3.1</Version>
     <!-- Портативная сборка обязана быть self-contained: build-portable.ps1 пакует
          publish/ как есть, и без этого флага архив уходит без рантайма .NET —
          приложение не запустится на машине без установленного Desktop Runtime.
@@ -69,5 +69,6 @@
   </Target>
 
 </Project>
+
 
 
