@@ -11,6 +11,11 @@
                 <ResourceDictionary Source="Styles/Motion.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- Масштаб сегмента ComboBox при нажатии. Заморожен (frozen), иначе
+                 шаблон не шарится между экземплярами. -->
+            <ScaleTransform x:Key="ComboScaleNormal" ScaleX="1" ScaleY="1" />
+            <ScaleTransform x:Key="ComboScalePressed" ScaleX="0.98" ScaleY="0.98" />
+
             <!-- ===== Токены дизайна ===== -->
             <!-- Фирменный красный Ardor (требование: #E81123 / #FF2E2E). -->
             <Color x:Key="ImpactAccentColor">#E81123</Color>
@@ -269,7 +274,7 @@
                                     Padding="14,7"
                                     SnapsToDevicePixels="True">
                                 <Border.RenderTransform>
-                                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                                    <StaticResource ResourceKey="ComboScaleNormal" />
                                 </Border.RenderTransform>
                                 <Border.RenderTransformOrigin>
                                     <Point X="0.5" Y="0.5" />
@@ -279,20 +284,15 @@
                                                   RecognizesAccessKey="True" />
                             </Border>
                             <ControlTemplate.Triggers>
-                                <EventTrigger RoutedEvent="Click">
-                                    <BeginStoryboard>
-                                        <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="SegmentBg"
-                                                             Storyboard.TargetProperty="RenderTransform.ScaleX"
-                                                             To="0.98" Duration="0:0:0.08"
-                                                             AutoReverse="True" />
-                                            <DoubleAnimation Storyboard.TargetName="SegmentBg"
-                                                             Storyboard.TargetProperty="RenderTransform.ScaleY"
-                                                             To="0.98" Duration="0:0:0.08"
-                                                             AutoReverse="True" />
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
+                                <!-- Отклик на нажатие — обычный Setter, не Storyboard.
+                                     Анимация RenderTransform.ScaleX через
+                                     Storyboard.TargetName в этом шаблоне не могла
+                                     разрешить цель (InvalidOperationException из
+                                     Storyboard.VerifyPathIsAnimatable). -->
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="SegmentBg" Property="RenderTransform"
+                                            Value="{StaticResource ComboScalePressed}" />
+                                </Trigger>
                                 <Trigger Property="IsChecked" Value="True">
                                     <Setter TargetName="SegmentBg" Property="Background" Value="{DynamicResource ImpactAccentBrush}" />
                                     <Setter TargetName="SegmentBg" Property="BorderBrush" Value="{DynamicResource ImpactAccentBrush}" />

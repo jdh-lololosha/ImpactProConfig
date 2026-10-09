@@ -5,6 +5,27 @@
       Title="Кнопки">
 
     <Page.Resources>
+        <!-- Масштаб маркера. Раньше наведение анимировалось Storyboard с
+             Storyboard.TargetProperty="RenderTransform.ScaleX" внутри
+             EventTrigger на всплывающем MouseEnter, в ControlTemplate, который
+             применяется из DataTemplate (6 экземпляров). WPF на таком пути
+             не смог разрешить цель и бросал
+             InvalidOperationException из Storyboard.VerifyPathIsAnimatable
+             на КАЖДОЕ срабатывание MouseOver — 85 926 исключений за час,
+             из-за чего crash.log дорос до 1.2 ГБ.
+
+             Теперь состояние переключают обычные Setter: целевой объект
+             передаётся напрямую, без Storyboard, без поиска по имени и
+             без VerifyPathIsAnimatable. Transform — замороженные (frozen),
+             иначе шаблон не шарится между экземплярами. -->
+        <ScaleTransform x:Key="MarkerScaleNormal" ScaleX="1" ScaleY="1" />
+        <ScaleTransform x:Key="MarkerScaleHover" ScaleX="1.18" ScaleY="1.18" />
+
+        <DropShadowEffect x:Key="MarkerGlowOff"
+                          BlurRadius="0" ShadowDepth="0" Opacity="0" />
+        <DropShadowEffect x:Key="MarkerGlowOn"
+                          BlurRadius="12" ShadowDepth="0" Opacity="0.8" />
+
         <!-- Круглый маркер-номер на изображении мыши (22px, полупрозрачный) -->
         <Style x:Key="MarkerButton" TargetType="{x:Type Button}">
             <Setter Property="Width" Value="22" />
@@ -19,7 +40,7 @@
                     <ControlTemplate TargetType="{x:Type Button}">
                         <Grid x:Name="MarkerRoot" RenderTransformOrigin="0.5,0.5">
                             <Grid.RenderTransform>
-                                <ScaleTransform ScaleX="1" ScaleY="1" />
+                                <StaticResource ResourceKey="MarkerScaleNormal" />
                             </Grid.RenderTransform>
                             <Border x:Name="MarkerBg"
                                     CornerRadius="11"
@@ -56,60 +77,22 @@
                             </Path>
                         </Grid>
                         <ControlTemplate.Triggers>
-                            <EventTrigger RoutedEvent="MouseEnter">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="MarkerRoot"
-                                                         Storyboard.TargetProperty="RenderTransform.ScaleX"
-                                                         To="1.15" Duration="0:0:0.12">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="MarkerRoot"
-                                                         Storyboard.TargetProperty="RenderTransform.ScaleY"
-                                                         To="1.15" Duration="0:0:0.12">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="MarkerBg"
-                                                         Storyboard.TargetProperty="Effect.BlurRadius"
-                                                         To="12" Duration="0:0:0.12" />
-                                        <DoubleAnimation Storyboard.TargetName="MarkerBg"
-                                                         Storyboard.TargetProperty="Effect.Opacity"
-                                                         To="0.8" Duration="0:0:0.12" />
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
-                            <EventTrigger RoutedEvent="MouseLeave">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="MarkerRoot"
-                                                         Storyboard.TargetProperty="RenderTransform.ScaleX"
-                                                         To="1" Duration="0:0:0.12">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="MarkerRoot"
-                                                         Storyboard.TargetProperty="RenderTransform.ScaleY"
-                                                         To="1" Duration="0:0:0.12">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut" />
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="MarkerBg"
-                                                         Storyboard.TargetProperty="Effect.BlurRadius"
-                                                         To="0" Duration="0:0:0.12" />
-                                        <DoubleAnimation Storyboard.TargetName="MarkerBg"
-                                                         Storyboard.TargetProperty="Effect.Opacity"
-                                                         To="0" Duration="0:0:0.12" />
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
+                            <!-- Наведение переключает состояние обычными Setter.
+                                 Storyboard с RenderTransform.ScaleX здесь больше нет:
+                                 он не мог разрешить цель в шаблоне, применяемом из
+                                 DataTemplate, и бросал исключение на каждый MouseOver. -->
                             <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="MarkerRoot" Property="RenderTransform"
+                                        Value="{StaticResource MarkerScaleHover}" />
+                                <Setter TargetName="MarkerBg" Property="Effect"
+                                        Value="{StaticResource MarkerGlowOn}" />
                                 <Setter TargetName="MarkerBg" Property="Background" Value="{DynamicResource ImpactAccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="False">
+                                <Setter TargetName="MarkerRoot" Property="RenderTransform"
+                                        Value="{StaticResource MarkerScaleNormal}" />
+                                <Setter TargetName="MarkerBg" Property="Effect"
+                                        Value="{StaticResource MarkerGlowOff}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="MarkerBg" Property="BorderBrush" Value="White" />

@@ -213,15 +213,22 @@ public sealed class DeviceSession : IDisposable
         // доказательство отсутствия записей — здесь фиксируются только Read*-события.
     private static void Log(string msg)
     {
-        try
+        string path = Path.Combine(App.DataDir, "session.log");
+        // Общий лок с crash.log: лог пишут несколько потоков, и без него
+        // подмена файла при обрезке падает с sharing violation.
+        lock (App.LogLock)
         {
-            File.AppendAllText(
-                Path.Combine(App.DataDir, "session.log"),
-                $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\n");
-        }
-        catch
-        {
-            // Лог не критичен.
+            try
+            {
+                // Ротация: без неё лог USB-сессии рос без ограничения.
+                // Порог и обрезка — общие с crash.log в App.
+                App.TrimLogIfNeeded(path);
+                File.AppendAllText(path, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\n");
+            }
+            catch
+            {
+                // Лог не критичен.
+            }
         }
     }
 

@@ -5,6 +5,11 @@
       Title="Сенсор и DPI">
 
     <Page.Resources>
+        <!-- Масштаб карточки DPI при нажатии. Заморожен (frozen), иначе шаблон
+             не шарится между экземплярами в ItemsControl. -->
+        <ScaleTransform x:Key="DpiCardScaleNormal" ScaleX="1" ScaleY="1" />
+        <ScaleTransform x:Key="DpiCardScalePressed" ScaleX="0.97" ScaleY="0.97" />
+
         <!-- Карточка одной DPI-ступени: Button-обёртка для корректной работы Click + анимаций -->
         <Style x:Key="DpiCardButton" TargetType="{x:Type Button}">
             <Setter Property="Width" Value="138" />
@@ -23,7 +28,7 @@
                                 Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <Border.RenderTransform>
-                                <ScaleTransform ScaleX="1" ScaleY="1" />
+                                <StaticResource ResourceKey="DpiCardScaleNormal" />
                             </Border.RenderTransform>
                             <Border.RenderTransformOrigin>
                                 <Point X="0.5" Y="0.5" />
@@ -32,30 +37,14 @@
                                               VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
-                            <EventTrigger RoutedEvent="PreviewMouseDown">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="CardBorder"
-                                                         Storyboard.TargetProperty="RenderTransform.ScaleX"
-                                                         To="0.97" Duration="0:0:0.08" />
-                                        <DoubleAnimation Storyboard.TargetName="CardBorder"
-                                                         Storyboard.TargetProperty="RenderTransform.ScaleY"
-                                                         To="0.97" Duration="0:0:0.08" />
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
-                            <EventTrigger RoutedEvent="PreviewMouseUp">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="CardBorder"
-                                                         Storyboard.TargetProperty="RenderTransform.ScaleX"
-                                                         To="1" Duration="0:0:0.08" />
-                                        <DoubleAnimation Storyboard.TargetName="CardBorder"
-                                                         Storyboard.TargetProperty="RenderTransform.ScaleY"
-                                                         To="1" Duration="0:0:0.08" />
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
+                            <!-- Нажатие переключает масштаб обычным Setter, как в
+                                 MarkerButton: Storyboard с RenderTransform.ScaleX не мог
+                                 разрешить цель в шаблоне и бросал InvalidOperationException
+                                 из Storyboard.VerifyPathIsAnimatable. -->
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="CardBorder" Property="RenderTransform"
+                                        Value="{StaticResource DpiCardScalePressed}" />
+                            </Trigger>
                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                 <Setter TargetName="CardBorder" Property="Background" Value="#1A000000" />
                                 <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource ImpactAccentBrush}" />

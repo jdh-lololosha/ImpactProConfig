@@ -508,6 +508,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Ссылка на .zip из релиза (null — ассет приложен не был).</summary>
     public string? UpdateDownloadUrl { get; private set; }
 
+    /// <summary>Тег релиза, например «v1.2.0». Показывается в окне апдейтера.</summary>
+    public string? UpdateVersion { get; private set; }
+
     /// <summary>Просьба закрыть приложение (после запуска портативного обновления).</summary>
     public event Action? ExitRequested;
 
@@ -533,6 +536,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
 
         UpdateDownloadUrl = info.Url;
+        UpdateVersion = info.Tag;
         UpdateMessage = $"{info.Tag} (у вас {UpdateService.CurrentVersion.ToString(3)})";
         IsUpdateAvailable = true;
     }
@@ -551,8 +555,25 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         StatusText = "Загрузка обновления…";
         try
         {
-            await UpdateService.DownloadAndUpdateAsync(url);
-            StatusText = "Обновление скачано. Перезапуск…";
+            // Реальный прогресс: раньше был один CopyToAsync без отчёта,
+            // и 78 МБ скачивались в молчание (UI выглядел зависшим).
+            var progress = new Progress<(long Done, long Total)>(p =>
+            {
+                long done = p.Done;
+                long total = p.Total;
+                if (total > 0)
+                    StatusText = $"Загрузка обновления… {done / 1048576.0:0.#} МБ / {total / 1048576.0:0.#} МБ";
+                else
+                    StatusText = $"Загрузка обновления… {done / 1048576.0:0.#} МБ";
+            });
+
+            string version = UpdateVersion ?? "новая версия";
+            await UpdateService.DownloadAndUpdateAsync(url, version, progress);
+
+            StatusText = "Обновление скачано, установка…";
+            // Даём статус отрисоваться: дальше приложение закрывается,
+            // и окно сплэша Updater.exe покажет оставшиеся фазы.
+            await Task.Delay(150);
             ExitRequested?.Invoke();
         }
         catch (Exception ex)

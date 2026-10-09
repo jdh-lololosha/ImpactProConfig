@@ -1,5 +1,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -35,17 +36,95 @@ public partial class App : Application
         }
     }
 
-    internal static void Log(string msg)
+    /// <summary>
+    /// Порог ротации логов: 5 МБ на файл.
+    ///
+    /// Раньше ограничения не было вообще, и crash.log дорос до 1.2 ГБ за
+    /// несколько сессий: исключение RenderTransform.ScaleX на MouseEnter
+    /// повторялось ~86 тысяч раз за час, и каждое писалось в лог. Файл
+    /// такого размера сам начинает тормозить запись и съедает диск.
+    /// </summary>
+    private const long MaxLogBytes = 5 * 1024 * 1024;
+
+    /// <summary>
+    /// Обрезает лог до последних MaxLogBytes, помечая срез. Вызывается перед
+    /// каждой записью: дешевле, чем после, и не даёт файлу перерасти лимит
+    /// на длинном цикле записи.
+    ///
+    /// Порог и обрезка — общие с логом USB-сессии в Driver/DeviceSession.cs.
+    /// </summary>
+    internal static void TrimLogIfNeeded(string path)
     {
         try
         {
-            File.AppendAllText(
-                Path.Combine(DataDir, "crash.log"),
-                $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\n");
+            var info = new FileInfo(path);
+            if (!info.Exists || info.Length <= MaxLogBytes)
+                return;
+
+            // Читаем хвост файла целыми строками, чтобы не порвать UTF-8
+            // посреди символа и не оставить в логе обрывок сообщения.
+            const int tailBytes = (int)MaxLogBytes / 2;
+            string tail;
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite))
+            {
+                stream.Seek(Math.Max(0, stream.Length - tailBytes), SeekOrigin.Begin);
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+                tail = reader.ReadToEnd();
+            }
+
+            int firstNewline = tail.IndexOf('\n');
+            if (firstNewline >= 0)
+                tail = tail[(firstNewline + 1)..];
+
+            string header =
+                $"=== log truncated at {DateTime.Now:yyyy-MM-dd HH:mm:ss} " +
+                $"(was {info.Length / 1048576.0:0.#} MB) ===\n";
+
+            // Подмена через File.Replace: она умеет менять файл на месте, тогда
+            // как File.Move(overwrite) требует DELETE-доступа и падает с
+            // sharing violation, если файл открыт кем-то ещё (лог пишут
+            // несколько потоков: UI, USB-сессия, Dispatcher-исключения).
+            string tmp = path + ".tmp";
+            File.WriteAllText(tmp, header + tail);
+            try
+            {
+                File.Move(tmp, path, overwrite: true);
+            }
+            catch (IOException)
+            {
+                // Файл занят другим потоком — повторяем, запись короточная.
+                Thread.Sleep(40);
+                File.Move(tmp, path, overwrite: true);
+            }
         }
         catch
         {
-            // Лог не критичен.
+            // Обрезка не критична: если не вышло — пишем дальше, лог вырастет
+            // и будет обрезан при следующем вызове.
+        }
+    }
+
+    /// <summary>
+    /// Сервлайн логов: без него два потока открывают один файл, и подмена
+    /// при обрезке падает с sharing violation.
+    /// </summary>
+    internal static readonly object LogLock = new();
+
+    internal static void Log(string msg)
+    {
+        string path = Path.Combine(DataDir, "crash.log");
+        lock (LogLock)
+        {
+            try
+            {
+                TrimLogIfNeeded(path);
+                File.AppendAllText(path, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\n");
+            }
+            catch
+            {
+                // Лог не критичен.
+            }
         }
     }
 

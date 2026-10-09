@@ -49,7 +49,7 @@ $rows = Get-ChildItem -LiteralPath $root -Recurse -File | ForEach-Object {
     [pscustomobject]@{ Rel = $rel; Dir = $dir; Full = $_.FullName }
 }
 
-$dirIds     = @{ '' = 'INSTALLFOLDER' }   # dir rel -> xml Id
+$dirIds     = @{ '' = 'INSTALLFOLDER_APP' }   # dir rel -> xml Id
 $childrenOf = @{}                          # parent dir -> [child dirs]
 $fileByDir  = @{}                          # dir -> rows
 
@@ -112,14 +112,14 @@ $script:refs.Add('C_StartMenuShortcut')
 $shortcuts = @"
     <StandardDirectory Id="DesktopFolder">
       <Component Id="C_DesktopShortcut" Guid="$desktopGuid">
-        <Shortcut Id="SC_Desktop" Name="ARDOR GAMING Impact PRO" Target="[INSTALLFOLDER]ImpactProConfig.exe" WorkingDirectory="INSTALLFOLDER" />
-        <RegistryValue Root="HKLM" Key="Software\ARDOR GAMING\ImpactProConfig" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+        <Shortcut Id="SC_Desktop" Name="ARDOR GAMING Impact PRO" Target="[INSTALLFOLDER_APP]ImpactProConfig.exe" WorkingDirectory="INSTALLFOLDER_APP" />
+        <RegistryValue Root="HKCU" Key="Software\ARDOR GAMING\ImpactProConfig" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder">
       <Component Id="C_StartMenuShortcut" Guid="$startGuid">
-        <Shortcut Id="SC_Start" Name="ARDOR GAMING Impact PRO" Target="[INSTALLFOLDER]ImpactProConfig.exe" WorkingDirectory="INSTALLFOLDER" />
-        <RegistryValue Root="HKLM" Key="Software\ARDOR GAMING\ImpactProConfig" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+        <Shortcut Id="SC_Start" Name="ARDOR GAMING Impact PRO" Target="[INSTALLFOLDER_APP]ImpactProConfig.exe" WorkingDirectory="INSTALLFOLDER_APP" />
+        <RegistryValue Root="HKCU" Key="Software\ARDOR GAMING\ImpactProConfig" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </StandardDirectory>
 "@
@@ -138,12 +138,19 @@ $wxs = @"
            Version="$productVersion"
            Manufacturer="ARDOR GAMING"
            UpgradeCode="$upgradeGuid"
-           Scope="perMachine">
+           Scope="perUser">
     <MajorUpgrade DowngradeErrorMessage="A newer version of ImpactProConfig is already installed." />
     <MediaTemplate EmbedCab="yes" />
-    <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="ImpactProConfig">
-$inner      </Directory>
+    <!-- Per-user install: %LOCALAPPDATA%\Programs\ImpactProConfig.
+         Program Files требовал бы UAC, а из-за этого автоапдейтер получал
+         access denied при замене файлов. В LocalAppData у пользователя
+         полные права без админа, поэтому и распаковка, и обновление
+         проходят без блокировок и запросов повышения. -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="Programs">
+        <Directory Id="INSTALLFOLDER_APP" Name="ImpactProConfig">
+$inner        </Directory>
+      </Directory>
     </StandardDirectory>
 $shortcuts
     <Feature Id="Main" Title="ImpactProConfig" Level="1">

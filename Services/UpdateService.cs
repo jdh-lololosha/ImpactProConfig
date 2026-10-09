@@ -98,7 +98,9 @@ internal sealed class UpdateService
     /// Updater.exe в папке приложения сам является обновляемым файлом.
     /// Прав админа не нужно — программа живёт в своей папке.
     /// </summary>
-    public static async Task DownloadAndUpdateAsync(string zipUrl)
+    public static async Task DownloadAndUpdateAsync(string zipUrl, string version,
+                                                      IProgress<(long Done, long Total)>? progress = null,
+                                                      CancellationToken ct = default)
     {
         string tempDir = Path.Combine(Path.GetTempPath(),
             $"ImpactProConfig-update-{Guid.NewGuid():N}");
@@ -110,13 +112,24 @@ internal sealed class UpdateService
         using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("ImpactProConfig");
 
-        await using (var source = await client.GetStreamAsync(zipUrl))
+        // Отменяемый запрос: без ct загрузка не прерывалась до 10-минутного
+        // таймаута, и приложение выглядело зависшим.
+        using var request = new HttpRequestMessage(HttpMethod.Get, zipUrl);
+        using var response = await client.SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+
+        long total = response.Content.Headers.ContentLength ?? -1;
+        progress?.Report((0, total));
+
+        await using (var source = await response.Content.ReadAsStreamAsync(ct))
         await using (var dest = File.Create(zipPath))
         {
-            await source.CopyToAsync(dest);
+            await CopyWithProgressAsync(source, dest, total, progress, ct);
         }
 
-        string appDir = AppContext.BaseDirectory.TrimEnd('\\');
+        string appDir = Path.GetFullPath(AppContext.BaseDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         string updaterSrc = Path.Combine(appDir, "Updater.exe");
         if (!File.Exists(updaterSrc))
             throw new FileNotFoundException(
@@ -124,19 +137,52 @@ internal sealed class UpdateService
 
         // Копия апдейтера во временную папку: в папке приложения свой же
         // Updater.exe запущен и перезаписать его нельзя (те же блокировки exe).
+        // Копируем весь набор: Updater.exe может быть framework-dependent
+        // и требует Updater.dll рядом с собой.
         string updaterCopy = Path.Combine(tempDir, "Updater.exe");
         File.Copy(updaterSrc, updaterCopy, overwrite: true);
+        foreach (string extra in new[] { "Updater.dll", "Updater.deps.json", "Updater.runtimeconfig.json" })
+        {
+            string src = Path.Combine(appDir, extra);
+            if (File.Exists(src))
+                File.Copy(src, Path.Combine(tempDir, extra), overwrite: true);
+        }
 
         int pid = Environment.ProcessId;
-        _ = Process.Start(new ProcessStartInfo
+        var psi = new ProcessStartInfo
         {
             FileName = updaterCopy,
-            Arguments = $"--zip \"{zipPath}\" --target \"{appDir}\" --pid {pid}",
+            WorkingDirectory = tempDir,
             UseShellExecute = false,
-            CreateNoWindow = true,
-        });
+        };
+        // ArgumentList вместо склейки строки: путь с кавычками ломал разбор.
+        psi.ArgumentList.Add("--zip");
+        psi.ArgumentList.Add(zipPath);
+        psi.ArgumentList.Add("--target");
+        psi.ArgumentList.Add(appDir);
+        psi.ArgumentList.Add("--pid");
+        psi.ArgumentList.Add(pid.ToString());
+        psi.ArgumentList.Add("--version");
+        psi.ArgumentList.Add(version);
 
-        App.Log($"Update: zip скачан, Updater.exe запущен (pid={pid}), выход приложения");
+        _ = Process.Start(psi);
+        App.Log($"Update: zip скачан, Updater.exe запущен (pid={pid}, ver={version})");
+    }
+
+    /// <summary>Копирование потока с отчётом прогресса и поддержкой отмены.</summary>
+    private static async Task CopyWithProgressAsync(Stream source, Stream dest,
+        long total, IProgress<(long Done, long Total)>? progress, CancellationToken ct)
+    {
+        byte[] buffer = new byte[81920];
+        long done = 0;
+        int read;
+
+        while ((read = await source.ReadAsync(buffer, ct)) > 0)
+        {
+            await dest.WriteAsync(buffer.AsMemory(0, read), ct);
+            done += read;
+            progress?.Report((done, total));
+        }
     }
 
     /// <summary>
