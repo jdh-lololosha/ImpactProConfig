@@ -113,6 +113,14 @@
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem
+                    Content="Батарея"
+                    Tag="BatteryPage"
+                    TargetPageType="{x:Type pages:BatteryPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="BatteryCharge24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem
                     Content="Акселерация"
                     Tag="AccelerationPage"
                     TargetPageType="{x:Type pages:AccelerationPage}">

@@ -14,10 +14,39 @@ namespace ImpactProConfig.Services;
 internal static class MouseOsdHook
 {
     private const int WhMouseLl = 14;
+    private const int WmMouseMove = 0x0200;
     private const int WmLButtonDown = 0x0201;
     private const int WmRButtonDown = 0x0204;
     private const int WmMButtonDown = 0x0207;
     private const int WmXButtonDown = 0x020B;
+
+    /// <summary>
+    /// Момент последнего движения мыши (UTC). Хук и так получает все события
+    /// мыши, поэтому метка обновляется одной записью DateTime без всяких
+    /// дополнительных подписок. Нужна для разделения расхода батареи на
+    /// «работа» и «ожидание»: вендорский протокол не сообщает о движении.
+    ///
+    /// Interlocked.Exchange вместо простого присваивания: хук зовётся из
+    /// потока хука, читаем мы с UI-потока, и long не атомарен на 32-битном
+    /// смещении архитектуры.
+    /// </summary>
+    private static long _lastMoveTicks;
+
+    public static DateTimeOffset LastMoveAt =>
+        Interlocked.Read(ref _lastMoveTicks) == 0
+            ? DateTimeOffset.MinValue
+            : new DateTimeOffset(Interlocked.Read(ref _lastMoveTicks), TimeSpan.Zero);
+
+    /// <summary>
+    /// Мышь двигалась недавно (в пределах <paramref name="window"/>)?
+    /// До первого движения честно отвечает false, а не «да»: иначе компьютер,
+    /// который только включили, попал бы в статистику как «активная работа».
+    /// </summary>
+    public static bool WasActiveRecently(TimeSpan window)
+    {
+        long ticks = Interlocked.Read(ref _lastMoveTicks);
+        return ticks != 0 && DateTimeOffset.UtcNow - new DateTimeOffset(ticks, TimeSpan.Zero) < window;
+    }
 
     private static IntPtr _hookId;
     private static MouseHookProc? _proc;   // живая ссылка — иначе GC соберёт делегат
@@ -78,18 +107,30 @@ internal static class MouseOsdHook
     {
         try
         {
-            if (nCode >= 0 && _handler != null)
+            if (nCode >= 0)
             {
-                int usage = (int)wParam switch
+                int message = (int)wParam;
+
+                // Отметка активности для статистики батареи. Стоит до проверки
+                // _handler: движение мыши интересует нас всегда, даже когда
+                // OSD-оверлей выключен и _handler == null.
+                if (message == WmMouseMove)
                 {
-                    WmLButtonDown => 1,          // MouseKey.LeftKey
-                    WmRButtonDown => 2,          // MouseKey.RightKey
-                    WmMButtonDown => 4,          // MouseKey.MiddleKey
-                    WmXButtonDown => XUsage(lParam),
-                    _ => 0
-                };
-                if (usage != 0 && _handler(usage))
-                    return (IntPtr)1;            // съесть — ОС нажатие не увидит
+                    Interlocked.Exchange(ref _lastMoveTicks, DateTime.UtcNow.Ticks);
+                }
+                else if (_handler != null)
+                {
+                    int usage = message switch
+                    {
+                        WmLButtonDown => 1,          // MouseKey.LeftKey
+                        WmRButtonDown => 2,          // MouseKey.RightKey
+                        WmMButtonDown => 4,          // MouseKey.MiddleKey
+                        WmXButtonDown => XUsage(lParam),
+                        _ => 0
+                    };
+                    if (usage != 0 && _handler(usage))
+                        return (IntPtr)1;            // съесть — ОС нажатие не увидит
+                }
             }
         }
         catch

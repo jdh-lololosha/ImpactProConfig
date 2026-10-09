@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace ImpactProConfig.Services;
 
 /// <summary>Одна точка измерения: заряд в процентах и время замера.</summary>
-internal sealed class BatterySample
+public sealed class BatterySample
 {
     /// <summary>Время замера (UTC).</summary>
     public DateTimeOffset At { get; set; }
@@ -14,13 +14,77 @@ internal sealed class BatterySample
 
     /// <summary>true — шёл разряд, false — зарядка.</summary>
     public bool Discharging { get; set; }
+
+    /// <summary>
+    /// Частота опроса мыши в момент замера, Гц (REPORT_RATE как байт: 1=1000,
+    /// 0x20=4000). Ноль — неизвестно: так помечаются точки из файлов, писанных
+    /// до того как это поле появилось (старые battery_stats.json).
+    ///
+    /// Нужен для разделения расхода по нагрузке: без частоты опроса нельзя
+    /// отличить разряд в игре (4000 Гц) от офисной работы (1000 Гц), потому
+    /// что обе выглядят в телеметрии одинаково — просто падает процент.
+    /// </summary>
+    public byte ReportRate { get; set; }
+
+    /// <summary>
+    /// Была ли мышь активна в момент замера (двигалась). Нужно для режима
+    /// ожидания: простой и работа различаются только активностью, частоты
+    /// опроса у простоя нет.
+    /// </summary>
+    public bool Active { get; set; }
+}
+
+/// <summary>Режим нагрузки, к которому относится точка телеметрии.</summary>
+public enum LoadMode
+{
+    /// <summary>Неизвестно: точка из старого файла без частоты опроса.</summary>
+    Unknown = 0,
+
+    /// <summary>Активная игра: высокая частота опроса плюс движение.</summary>
+    Gaming = 1,
+
+    /// <summary>Обычное использование: базовая частота опроса плюс движение.</summary>
+    Normal = 2,
+
+    /// <summary>Ожидание: мышь не двигалась.</summary>
+    Idle = 3,
+}
+
+/// <summary>История точек для графика и аналитики по режимам нагрузки.</summary>
+public readonly struct BatterySnapshot
+{
+    public IReadOnlyList<BatterySample> Samples { get; init; }
+    public DateTimeOffset? LastChargeAt { get; init; }
+    public DateTimeOffset? CurrentCycleStart { get; init; }
+
+    public static BatterySnapshot Empty { get; } = new()
+    {
+        Samples = Array.Empty<BatterySample>(),
+    };
+}
+
+/// <summary>Оценка расхода под одну нагрузку. null — данных не хватает.</summary>
+public sealed class DrainEstimate
+{
+    public double? PercentPerHour { get; init; }
+    public int SampleCount { get; init; }
+    public TimeSpan ObservedSpan { get; init; }
+
+    /// <summary>Осталось часов на указанном заряде. null — нет скорости.</summary>
+    public double? HoursLeftAt(int percent) =>
+        PercentPerHour is double r && r > 0 && percent > 0 ? percent / r : null;
 }
 
 /// <summary>Файл battery_stats.json — история замеров и выведенная скорость разряда.</summary>
 internal sealed class BatteryStatsFile
 {
-    /// <summary>Версия схемы: меняем, если формат поменяется.</summary>
-    public int SchemaVersion { get; set; } = 1;
+    /// <summary>
+    /// Версия схемы. Поднята с 1 до 2: в BatterySample добавлены ReportRate и
+    /// Active, без которых нельзя разделить расход по нагрузке. Старые файлы
+    /// со схемой 1 читаются как есть — новые поля окажутся нулевыми, и точки
+    /// без частоты опроса в аналитику по режимам не попадут.
+    /// </summary>
+    public int SchemaVersion { get; set; } = 2;
 
     /// <summary>История точек. Старые подрезаем, чтобы файл не рос бесконечно.</summary>
     public List<BatterySample> Samples { get; set; } = [];
@@ -86,7 +150,7 @@ internal sealed class BatteryStatsService
     /// Записать текущий уровень, если прошло достаточно времени с прошлой записи.
     /// Заряжающаяся мышь тоже пишется: по этим точкам видно, когда цикл начался.
     /// </summary>
-    public void Record(int percent, bool charging)
+    public void Record(int percent, bool charging, byte reportRate = 0, bool active = true)
     {
         if (percent < 0)
             return;
@@ -105,6 +169,8 @@ internal sealed class BatteryStatsService
                 At = now,
                 Percent = percent,
                 Discharging = !charging,
+                ReportRate = reportRate,
+                Active = active,
             });
 
             if (_data.Samples.Count > MaxSamples)
@@ -199,6 +265,137 @@ internal sealed class BatteryStatsService
 
     /// <summary>Готова ли статистика к показу.</summary>
     public bool HasEnoughData => DrainPerHour() is not null;
+
+    // ====== Снимок истории для графика и аналитики ======
+
+    /// <summary>
+    /// Копия последних точек за окно <paramref name="window"/>. Копия, а не
+    /// ссылка: UI перебирает точки на своём потоке, а список сервиса меняется
+    /// под замком при каждой записи.
+    /// </summary>
+    public BatterySnapshot Snapshot(TimeSpan window)
+    {
+        var cutoff = DateTimeOffset.UtcNow - window;
+
+        lock (_gate)
+        {
+            EnsureLoaded();
+
+            var samples = new List<BatterySample>();
+            DateTimeOffset? lastCharge = null;
+            DateTimeOffset? cycleStart = null;
+
+            foreach (var s in _data.Samples)
+            {
+                if (s.At < cutoff)
+                    continue;
+
+                samples.Add(s);
+
+                if (!s.Discharging)
+                {
+                    lastCharge = s.At;
+                    // Каждая точка зарядки переоткрывает цикл: последняя
+                    // из них — начало текущего.
+                    cycleStart = s.At;
+                }
+            }
+
+            // Если зарядки в окне не было, начало цикла ищем по всей истории.
+            if (cycleStart is null)
+            {
+                for (int i = _data.Samples.Count - 1; i >= 0; i--)
+                {
+                    if (!_data.Samples[i].Discharging)
+                    {
+                        lastCharge = _data.Samples[i].At;
+                        cycleStart = _data.Samples[i].At;
+                        break;
+                    }
+                }
+            }
+
+            return new BatterySnapshot
+            {
+                Samples = samples,
+                LastChargeAt = lastCharge,
+                CurrentCycleStart = cycleStart,
+            };
+        }
+    }
+
+    /// <summary>
+    /// К какому режиму нагрузки относится точка.
+    ///
+    /// Порог 2000 Гц: это R_2000 и R_4000, то есть именно те режимы, где
+    /// расход заметно выше. Всё остальное активное движение (1000 Гц и ниже,
+    /// включая 500/250/125) — обычное использование.
+    ///
+    /// Точки с ReportRate == 0 (старые файлы) дают Unknown и в оценку по
+    /// режимам не попадают: приписывать им нагрузку наугад хуже, чем показать
+    /// «нужно больше данных».
+    /// </summary>
+    public static LoadMode ModeOf(BatterySample s)
+    {
+        // ПОРЯДОК ПРОВЕРОК ВАЖЕН. ReportRate == 0 означает «точка из файла,
+        // писанного до схемы 2» — там нет ни частоты опроса, ни признака
+        // активности (Active десериализуется как false). Если спросить Active
+        // первым, все старые точки попадут в Idle и оценка простоя станет
+        // мусором из данных без единого разряда. Поэтому неизвестный источник
+        // отсекаем первым, и в оценки по режимам такие точки не идут вовсе.
+        if (s.ReportRate == 0)
+            return LoadMode.Unknown;
+        if (!s.Active)
+            return LoadMode.Idle;
+        return s.ReportRate >= 0x10 /* R_2000 */ ? LoadMode.Gaming : LoadMode.Normal;
+    }
+
+    /// <summary>
+    /// Скорость разряда под конкретный режим нагрузки, %/ч.
+    ///
+    /// Считается так же, как общий DrainPerHour: по крайним разрядным точкам
+    /// выбранного режима внутри текущего цикла разряда. Точки зарядки не
+    /// участвуют — иначе скорость вышла бы отрицательной.
+    ///
+    /// Возвращает null, если точек режима меньше двух или суммарный разряд
+    /// слишком мал: лучше «нужно больше данных», чем число из шума.
+    /// </summary>
+    public DrainEstimate EstimateFor(LoadMode mode)
+    {
+        lock (_gate)
+        {
+            EnsureLoaded();
+
+            BatterySample? first = null, last = null;
+            int count = 0;
+
+            foreach (var s in _data.Samples)
+            {
+                if (!s.Discharging) continue;
+                if (ModeOf(s) != mode) continue;
+
+                first ??= s;
+                last = s;
+                count++;
+            }
+
+            if (first is null || last is null || ReferenceEquals(first, last) || count < 2)
+                return new DrainEstimate { SampleCount = count };
+
+            double drop = first.Percent - last.Percent;
+            double hours = (last.At - first.At).TotalHours;
+            if (hours <= 0 || drop < MinDropPercent)
+                return new DrainEstimate { SampleCount = count, ObservedSpan = last.At - first.At };
+
+            double rate = drop / hours;
+            return new DrainEstimate
+            {
+                PercentPerHour = rate < MinDrainPerHour ? null : rate,
+                SampleCount = count,
+                ObservedSpan = last.At - first.At,
+            };
+        }
+    }
 
     /// <summary>Человекочитаемый текст расхода, напр. «6.4 %/ч».</summary>
     public string DrainText =>

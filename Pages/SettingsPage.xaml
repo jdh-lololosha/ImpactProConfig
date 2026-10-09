@@ -71,6 +71,21 @@
                                    Margin="14,0,0,0"
                                    VerticalAlignment="Center" />
                     </Grid>
+
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Версия приложения"
+                                   VerticalAlignment="Center"
+                                   Opacity="0.8" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding AppVersionText}"
+                                   FontWeight="SemiBold"
+                                   Margin="14,0,0,0"
+                                   VerticalAlignment="Center" />
+                    </Grid>
                 </StackPanel>
                 </ui:Card>
 

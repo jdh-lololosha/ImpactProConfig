@@ -488,6 +488,29 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>Сколько точек уже накоплено — видно, что статистика не пустая.</summary>
     public string BatteryStatsSamplesText => $"{_batteryStats.SampleCount} замеров";
+    // ====== Данные для вкладки "Батарея" ======
+
+    /// <summary>
+    /// Снимок истории для графика и аналитики. Публичная точка входа для
+    /// BatteryPage: там своя ViewModel со своим окном времени (24 ч / 7 дней),
+    /// а сервис общий - иначе две страницы писали бы в один файл и обе держали
+    /// бы копию всей истории.
+    /// </summary>
+    public BatterySnapshot BatterySnapshotFor(TimeSpan window) => _batteryStats.Snapshot(window);
+
+    /// <summary>Оценка расхода под режим нагрузки, %/ч.</summary>
+    public DrainEstimate BatteryEstimateFor(LoadMode mode) => _batteryStats.EstimateFor(mode);
+
+    /// <summary>Акцентный цвет темы для графиков - тот же, что у ползунков.</summary>
+    public Color AccentColorForCharts =>
+        System.Windows.Application.Current?.TryFindResource("ImpactAccentColor") is Color c
+            ? c
+            : Color.FromRgb(0xE8, 0x11, 0x23);
+
+    /// <summary>Версия приложения из сборки, напр. "v1.3.0".</summary>
+    public string AppVersionText =>
+        "v" + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3)
+               ?? "0.0.0");
 
     // ===== Проверка обновлений =====
 
@@ -1261,7 +1284,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             : RedBrush;
         OnPropertyChanged(nameof(BatteryText));
 
-        _batteryStats.Record(bat.level, bat.isCharging != 0);
+        _batteryStats.Record(
+            bat.level,
+            bat.isCharging != 0,
+            // FlashDataMap - обнулённая структура: reportRate остаётся 0, пока
+            // конфиг не прочитан из флеша (см. EstimateRuntimeHours, там же
+            // фолбэк). Без подстановки частота засекалась бы как "неизвестно"
+            // и оценки по режимам не набрались бы НИКОГДА. 1000 Гц - базовая
+            // частота, с неё мышь стартует по умолчанию.
+            _working.mouseConfig.reportRate != 0
+                ? _working.mouseConfig.reportRate
+                : (byte)REPORT_RATE.R_1000,
+            // Активность берём из хука мыши: за последние 2 минуты было
+            // движение — считаем работу, иначе ожидание.
+            MouseOsdHook.WasActiveRecently(TimeSpan.FromMinutes(2)));
         RaiseBatteryStats();
 
         CheckLowBatteryAlert();
