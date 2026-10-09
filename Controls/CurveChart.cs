@@ -3,10 +3,13 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using ImpactProConfig.Services;
 
 namespace ImpactProConfig.Controls;
+
+/// <summary>
 
 /// <summary>
 /// График кривой акселерации Raw Accel.
@@ -25,6 +28,26 @@ namespace ImpactProConfig.Controls;
 /// </summary>
 public sealed class CurveChart : FrameworkElement
 {
+/// Доля отрисованной линии: 0 — пусто, 1 — вся кривая.
+///
+/// Вместо анимации Clip (или OpacityMask) геометрия просто обрезается по
+/// доле точек. Причина — Clip у элемента в WPF выключает GPU-ускорение
+/// этого элемента: он уходит в программный растеризатор, и анима��ия в 400
+/// точек начинает есть кадры. Здесь же мы остаёмся на пути композиции GPU,
+/// а стоимость кадра — это лишь отбрасывание хвоста списка точек.
+///
+/// Целое число от 0 до 1; анимируется в коде при загрузке.
+/// </summary>
+public double RevealFraction
+{
+    get => (double)GetValue(RevealFractionProperty);
+    set => SetValue(RevealFractionProperty, value);
+}
+
+public static readonly DependencyProperty RevealFractionProperty =
+    DependencyProperty.Register(
+        nameof(RevealFraction), typeof(double), typeof(CurveChart),
+        new PropertyMetadata(1.0));
     // ---- параметры кривой (приходят из VM) ----
 
     /// <summary>Тип кривой. null — драйвер не активен, рисуем заглушку.</summary>
@@ -101,6 +124,50 @@ public sealed class CurveChart : FrameworkElement
         Math.Max(1, ActualHeight - 44));
 
     /// <summary>
+/// Отрезает начальный отрезок точек по доле кривой.
+///
+/// fraction <= 0 -> пусто (ничего не рисуем), >= 1 -> все точки без
+/// копирования. Точки НЕ деформируются и не интерполируются: кривая
+/// рисуется ровно такая же, просто раскрывается слева направо.
+/// </summary>
+    internal static IReadOnlyList<Point> RevealSlice(
+        IReadOnlyList<Point> pts, double fraction)
+    {
+        if (fraction >= 1.0) return pts;
+        if (fraction <= 0.0) return Array.Empty<Point>();
+
+        int take = (int)Math.Ceiling(pts.Count * Math.Clamp(fraction, 0.0, 1.0));
+        if (take >= pts.Count) return pts;
+        if (take <= 0) return Array.Empty<Point>();
+
+        // Subarray не копирует - это срез исходного массива, дёшево.
+        return pts is Point[] arr ? arr.AsSpan(0, take).ToArray() : pts.Take(take).ToArray();
+    }
+
+    /// <summary>
+    /// Запускает вычерчивание линии при загрузке: 0 -> 1 за 450 мс, EaseOut.
+    ///
+    /// Вызывается из code-behind страницы, а не из OnRender: если бы анимация
+    /// стартовала внутри отрисовки, она бы перезапускалась на каждом кадре.
+    /// </summary>
+    public void BeginReveal(TimeSpan? duration = null)
+    {
+        if (!_revealPlayed)
+        {
+            _revealPlayed = true;
+        }
+
+        var anim = new DoubleAnimation(0.0, 1.0, duration ?? TimeSpan.FromMilliseconds(450))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            FillBehavior = FillBehavior.HoldEnd,
+        };
+        BeginAnimation(RevealFractionProperty, anim);
+    }
+
+    private bool _revealPlayed;
+
+    /// <summary>
     /// Точки кривой в пикселях. Публично для тестов: проверяем, что Path
     /// действительно строится, не подменяясь заглушкой.
     /// </summary>
@@ -154,6 +221,17 @@ public sealed class CurveChart : FrameworkElement
 
         var pts = BuildPoints(mode.Value, args);
         if (pts.Count < 2) return;
+
+        // Вычерчивание: показываем только начальный отрезок кривой.
+        pts = RevealSlice(pts, RevealFraction);
+        if (pts.Count < 2)
+        {
+            // На ранних кадрах доступна одна-две точки - рисуем точку,
+            // иначе график моргает пустотой в начале анимации.
+            if (pts.Count == 1)
+                dc.DrawEllipse(null, _curvePen, pts[0], 2, 2);
+            return;
+        }
 
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())

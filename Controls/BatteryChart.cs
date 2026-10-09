@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using ImpactProConfig.Services;
 
 namespace ImpactProConfig.Controls;
@@ -184,13 +185,47 @@ public sealed class BatteryChart : FrameworkElement
     }
 
     /// <summary>
-    /// Один перерисовывающий счётчик: телеметрия батареи меняется раз в пять
+    /// Счётчик перерисовки: телеметрия батареи меняется раз в пять
     /// минут, так что подписываться на каждое свойство VM смысла нет.
     /// </summary>
     public static readonly DependencyProperty RevisionProperty =
         DependencyProperty.Register(
             nameof(Revision), typeof(int), typeof(BatteryChart),
             new PropertyMetadata(0, OnRevisionChanged));
+
+    /// <summary>
+    /// Доля отрисованной линии, 0…1. Линия вычерчивается слева направо.
+    ///
+    /// Почему не Clip: клип у элемента в WPF выключает GPU-ускорение
+    /// элемента — он уходит в программный растеризатор. Здесь вместо
+    /// обрезания элемента обрезается список точек, поэтому рендер остаётся
+    /// на пути композиции GPU.
+    /// </summary>
+    public static readonly DependencyProperty RevealFractionProperty =
+        DependencyProperty.Register(
+            nameof(RevealFraction), typeof(double), typeof(BatteryChart),
+            new PropertyMetadata(1.0, OnRevealFractionChanged));
+
+    public double RevealFraction
+    {
+        get => (double)GetValue(RevealFractionProperty);
+        set => SetValue(RevealFractionProperty, value);
+    }
+
+    private static void OnRevealFractionChanged(DependencyObject d,
+        DependencyPropertyChangedEventArgs e)
+        => ((BatteryChart)d).InvalidateVisual();
+
+    /// <summary>Запускает вычерчивание линии: 0 -> 1 за 450 мс, EaseOut.</summary>
+    public void BeginReveal(TimeSpan? duration = null)
+    {
+        BeginAnimation(RevealFractionProperty, new DoubleAnimation(
+            0.0, 1.0, duration ?? TimeSpan.FromMilliseconds(450))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            FillBehavior = FillBehavior.HoldEnd,
+        });
+    }
 
     public int Revision
     {
@@ -220,6 +255,17 @@ public sealed class BatteryChart : FrameworkElement
         }
 
         var pts = BuildPoints(samples);
+        if (pts.Count == 0) return;
+
+        // Вычерчивание слева направо: показываем только начальный отрезок.
+        double reveal = Math.Clamp(RevealFraction, 0.0, 1.0);
+        if (reveal < 1.0)
+        {
+            int take = (int)Math.Ceiling(pts.Count * reveal);
+            pts = take >= pts.Count
+                ? pts
+                : pts.Take(Math.Max(1, take)).ToList();
+        }
 
         // 1. Заливка под линией: тот же путь, замкнутый на низ области.
         if (pts.Count >= 2)

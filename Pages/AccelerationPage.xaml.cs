@@ -19,6 +19,9 @@ public partial class AccelerationPage : Page
 {
     private AccelerationViewModel? _vm;
 
+    /// <summary>Линия вычерчивается один раз за жизнь страницы.</summary>
+    private bool _revealPlayed;
+
     public AccelerationPage()
     {
         InitializeComponent();
@@ -89,6 +92,14 @@ public partial class AccelerationPage : Page
 
         _vm.RefreshStatus();
         SyncChart();
+
+        // Вычерчивание линии один раз за жизнь страницы: повторный запуск
+        // при каждом показе выглядел бы как перезагрузка графика.
+        if (!_revealPlayed)
+        {
+            _revealPlayed = true;
+            Chart.BeginReveal();
+        }
 
         // Перерисовываем по сигналу VM. Подписка на PropertyChanged здесь, а не
         // в конструкторе: CurveRevision меняется при каждом движении ползунка,

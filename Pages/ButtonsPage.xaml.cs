@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using ImpactProConfig.ViewModels;
 using Microsoft.Win32;
 
@@ -54,6 +56,58 @@ public partial class ButtonsPage : Page
     {
         if (Vm != null && sender is Border { Tag: int number })
             Vm.SelectedButtonIndex = number;
+    }
+
+    /// <summary>
+    /// Аврора, слой 2: разгорается при наведении на корпус мыши.
+    ///
+    /// Ловим на MouseGrid, а не на самом эллипсе: эллипс занимает полосу в
+    /// нижней части сцены, и курсор над корпусом его не пересекает. Grid
+    /// покрывает всю сцену, поэтому реакция срабатывает там, где её ждёт
+    /// пользователь.
+    ///
+    /// Здесь Storyboard из ресурсов, потому что он уже содержит EaseOut и
+    /// согласованный с базовым слоем масштаб 1.08. Обратный ход — свой,
+    /// с чуть большей длительностью (250 мс), чтобы уход был мягче прихода.
+    /// </summary>
+    private void MouseGrid_MouseEnter(object sender, MouseEventArgs e)
+    {
+        var sb = Application.Current?.FindResource("PodiumCharge") as Storyboard;
+        if (sb != null && PodiumCharge != null)
+        {
+            // Повторный Begin без Stop перезапускает с текущих значений;
+            // Stop гарантирует, что при быстром уходе-возврате состояние
+            // не останется на середине.
+            sb.Begin(PodiumCharge, HandoffBehavior.SnapshotAndReplace);
+        }
+    }
+
+    private void MouseGrid_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (PodiumCharge is null) return;
+
+        PodiumCharge.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(
+            0, PodiumCharge.Opacity, TimeSpan.FromMilliseconds(250))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            FillBehavior = FillBehavior.HoldEnd,
+        });
+
+        if (PodiumCharge.RenderTransform is ScaleTransform st)
+        {
+            st.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(
+                1, st.ScaleX, TimeSpan.FromMilliseconds(250))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                FillBehavior = FillBehavior.HoldEnd,
+            });
+            st.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(
+                1, st.ScaleY, TimeSpan.FromMilliseconds(250))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                FillBehavior = FillBehavior.HoldEnd,
+            });
+        }
     }
 
     private void Restore_Click(object sender, RoutedEventArgs e) => Vm?.DiscardChanges();

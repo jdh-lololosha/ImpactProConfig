@@ -130,11 +130,38 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Дыхание неонового подиума: Opacity 0.6→1.0, период 3.5с -->
+        <!-- Аврора, слой 1 (базовый): медленное «дыхание», период 4 с.
+             Opacity 0.45 -> 0.85. Заменяет прежние 3.5 с: медленное дыхание
+             не должно выглядеть как намёк на событие. -->
         <Storyboard x:Key="PodiumBreathing">
             <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                             From="0.6" To="1.0" Duration="0:0:1.75"
+                             From="0.45" To="0.85" Duration="0:0:2"
                              AutoReverse="True" RepeatBehavior="Forever"/>
+        </Storyboard>
+
+        <!-- Аврора, слой 2 (верхний): разгорается при наведении на корпус.
+             Базовое состояние Opacity 0, при MouseOver плавно до 0.55 —
+             это те самые +40% яркости относительно спокойного слоя.
+             Масштаб 1.0 -> 1.08 за 200 мс: ощущение «девайс заряжен». -->
+        <Storyboard x:Key="PodiumCharge">
+            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                             To="0.55" Duration="0:0:0.2">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                             To="1.08" Duration="0:0:0.2">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             To="1.08" Duration="0:0:0.2">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
         </Storyboard>
     </Page.Resources>
 
@@ -162,9 +189,15 @@
             <ui:Card Grid.Row="1" Padding="16">
                 <StackPanel>
                     <Viewbox Stretch="Uniform" HorizontalAlignment="Center" MaxHeight="360">
-                        <Grid x:Name="MouseGrid" Width="432" Height="356">
-                        <!-- Мягкое красное свечение-подиум под корпусом мыши -->
-                        <Ellipse Width="320"
+                        <Grid x:Name="MouseGrid" Width="432" Height="356"
+                      MouseEnter="MouseGrid_MouseEnter"
+                      MouseLeave="MouseGrid_MouseLeave">
+                        <!-- Аврора, слой 1: широкая мягкая подложка, медленно дышит.
+                             Рендер идёт как у обычного элемента (Opacity +
+                             RenderTransform), без Effect и без Clip, поэтому
+                             композиция остаётся на GPU. -->
+                        <Ellipse x:Name="PodiumBase"
+                                 Width="320"
                                  Height="104"
                                  HorizontalAlignment="Center"
                                  VerticalAlignment="Bottom"
@@ -180,6 +213,34 @@
                                     <BeginStoryboard Storyboard="{StaticResource PodiumBreathing}" />
                                 </EventTrigger>
                             </Ellipse.Triggers>
+                        </Ellipse>
+
+                        <!-- Аврора, слой 2: ярче и меньше. Лежит поверх
+                             подложки, поэтому при наведении разгорается
+                             именно он — базовый продолжает дышать. -->
+                        <Ellipse x:Name="PodiumCharge"
+                                 Width="230"
+                                 Height="78"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Bottom"
+                                 Margin="0,0,0,10"
+                                 Opacity="0"
+                                 RenderTransformOrigin="0.5,0.5">
+                            <Ellipse.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1" />
+                            </Ellipse.RenderTransform>
+                            <Ellipse.Fill>
+                                <RadialGradientBrush>
+                                    <GradientStop Color="{Binding AccentGlowBrush.Color}" Offset="0" />
+                                    <GradientStop Color="Transparent" Offset="0.85" />
+                                </RadialGradientBrush>
+                            </Ellipse.Fill>
+                            <!-- Триггеров MouseEnter/MouseLeave здесь нет
+                                 СОЗНАТЕЛЬНО: эллипс занимает лишь полосу внизу, и
+                                 курсор над корпусом мыши его вообще не
+                                 пересекает - разгоралось бы только при наведении
+                                 на сам свет. Ловим наведение на MouseGrid,
+                                 который покрывает всю сцену (см. ниже). -->
                         </Ellipse>
 
                         <!-- Образ корпуса выбирается в Настройках; здесь он просто отображается. -->

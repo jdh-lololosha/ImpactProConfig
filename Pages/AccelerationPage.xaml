@@ -195,7 +195,8 @@
                                 BorderBrush="#1AFFFFFF"
                                 BorderThickness="1"
                                 Height="240">
-                            <controls:CurveChart CurveRevision="{Binding CurveRevision}"
+                            <controls:CurveChart x:Name="Chart"
+                                                 CurveRevision="{Binding CurveRevision}"
                                                  MaxSpeed="200"
                                                  MaxMultiplier="2" />
                         </Border>

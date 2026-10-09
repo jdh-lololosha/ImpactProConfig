@@ -80,7 +80,27 @@
                 Проверено пробой: BasedOn сохраняет исходный ControlTemplate,
                 фон становится #14FFFFFF, размеры из внешнего стиля применяются.
             -->
-            <Style x:Key="ImpactNumberBox"
+            <!--
+            Пружинистые кнопки. Только RenderTransform и Opacity - оба
+            параметра WPF композитит на GPU без растеризации элемента.
+
+            Триггер IsPressed ставит Scale 0.95; отскок с перелётом (1.02 ->
+            1.0) добавляется анимацией из кода при снятии нажатия. Проверено
+            пробой: у ui:Button и ui:NavigationViewItem IsPressed-триггеров в
+            теме нет, а подмена RenderTransform на ScaleControl Transforme
+            шаблон не ломает.
+        -->
+        <Style TargetType="{x:Type ui:Button}"
+               BasedOn="{StaticResource ImpactPressSpring}" />
+        <Style TargetType="{x:Type ui:NavigationViewItem}"
+               BasedOn="{StaticResource ImpactPressSpring}" />
+
+        <!-- ui:NumberBox сознательно НЕ включён: он наследует TextBox, а не
+             ButtonBase, поэтому IsPressed у него нет и стиль не применился бы.
+             Поля ввода не «пружинят» — они и так дают обратную связь рамкой при
+             фокусе. -->
+
+        <Style x:Key="ImpactNumberBox"
                    TargetType="{x:Type ui:NumberBox}"
                    BasedOn="{StaticResource {x:Type ui:NumberBox}}">
                 <Setter Property="Background" Value="#14FFFFFF" />

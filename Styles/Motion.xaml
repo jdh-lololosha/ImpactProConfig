@@ -15,7 +15,22 @@
         <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
                          From="30" To="0" Duration="0:0:0.25"
                          EasingFunction="{StaticResource MotionBackEaseOut}"/>
+        <!-- Масштаб 0.9 -> 1.0: окно «выпрыгивает» из центра. Путь через
+             TransformGroup задан в OsdWindow (border.RenderTransform), иначе
+             путь (UIElement.RenderTransform).(ScaleTransform.ScaleX) не
+             разрешился бы - там лежит TranslateTransform. -->
+        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children).[1].(ScaleTransform.ScaleX)"
+                         From="0.9" To="1.0" Duration="0:0:0.25"
+                         EasingFunction="{StaticResource MotionOsdScaleEase}"/>
+        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children).[1].(ScaleTransform.ScaleY)"
+                         From="0.9" To="1.0" Duration="0:0:0.25"
+                         EasingFunction="{StaticResource MotionOsdScaleEase}"/>
     </Storyboard>
+
+    <!-- BackEase с амплитудой 0.35 - по требованию для OSD. Отдельный ресурс,
+         потому что MotionBackEaseOut использует 0.25 и менять его здесь
+         нельзя: он же применяется в других местах. -->
+    <BackEase x:Key="MotionOsdScaleEase" EasingMode="EaseOut" Amplitude="0.35" />
 
     <!-- ===== OSD Exit: fade out + 10px down, 150ms ExponentialEase ===== -->
     <Storyboard x:Key="MotionOsdExit">
@@ -36,5 +51,41 @@
                          From="16" To="0" Duration="0:0:0.2"
                          EasingFunction="{StaticResource MotionEaseOutCubic}"/>
     </Storyboard>
+
+    <!-- ===== Пружинящая физика нажатия =====
+         Только RenderTransform и Opacity: оба параметра WPF композитит на
+         GPU, без растеризации элемента.
+
+         Реализовано ПОСЛЕДОВАТЕЛЬНОСТЬЮ ТРИГГЕРОВ, а не наложением анимаций:
+         при IsPressed=true ставим Scale 0.95, при снятии триггер перестаёт
+         действовать и значение возвращается к 1.0. Отскок с перелётом
+         (0.95 -> 1.02 -> 1.0) добавляется анимацией из кода, потому что
+         выразить перелёт значением в триггере нельзя.
+
+         Проверено пробой ДО применения: у ui:Button и ui:NavigationViewItem
+         IsPressed-триггеров в теме НЕТ (есть только Appearance), а подмена
+         RenderTransform на ScaleTransform шаблон не ломает. Поэтому общий
+         стиль безопасен. -->
+
+    <Style x:Key="ImpactPressSpring" TargetType="{x:Type ButtonBase}">
+        <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+        <Setter Property="RenderTransform">
+            <Setter.Value>
+                <ScaleTransform ScaleX="1" ScaleY="1" />
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="RenderTransform">
+                    <Setter.Value>
+                        <ScaleTransform ScaleX="0.95" ScaleY="0.95" />
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.45" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
 
 </ResourceDictionary>

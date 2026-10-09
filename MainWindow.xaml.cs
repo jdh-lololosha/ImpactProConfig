@@ -278,6 +278,105 @@ public partial class MainWindow : FluentWindow
             page.RenderTransform = new TranslateTransform();
         var sb = Application.Current.FindResource("MotionPageEnter") as Storyboard;
         sb?.Begin(page);
+
+        AnimateCardsCascade(page);
+    }
+
+    /// <summary>
+    /// Каскадное появление карточек страницы: снизу вверх, со сдвигом
+    /// задержки 50 мс на карточку. Без этого все карточки всплывают разом и
+    /// интерфейс выглядит статично.
+    ///
+    /// Только RenderTransform (Translate) и Opacity - оба параметра WPF
+    /// композитит на GPU без растеризации элемента. КАДРОВЫЙ РЕНДЕР НЕ
+    /// ИСПОЛЬЗУЕТСЯ: карточки получают готовую трансформацию сразу, а
+    /// анимация идёт через диспетчер композиции, то есть она не занимает
+    /// UI-поток даже при десятке карточек.
+    ///
+    /// Трансформацию ставим в коде, а не в XAML: страницы разные, и общий
+    /// стиль навязал бы анимацию элементам, которые её не должны иметь
+    /// (например, самому ScrollViewer).
+    /// </summary>
+    private static void AnimateCardsCascade(FrameworkElement page)
+    {
+        // Верхний контейнер содержимого страницы: у наших страниц это Grid
+        // внутри ScrollViewer. Берём именно его, чтобы не анимировать сам
+        // ScrollViewer (он и есть "страница" для MotionPageEnter).
+        var container = page is ScrollViewer sv
+            ? sv.Content as FrameworkElement
+            : (FrameworkElement?)page;
+
+        if (container is null)
+            return;
+
+        var cards = CollectTopLevelCards(container);
+        if (cards.Count == 0)
+            return;
+
+        const int StaggerMs = 50;
+        const double RiseY = 25;
+
+        for (int i = 0; i < cards.Count; i++)
+        {
+            FrameworkElement card = cards[i];
+
+            // Заголовок страницы не "вылетает": он задаёт контекст, и его
+            // мигание вместе с карточками выглядит как ошибка вёрстки.
+            if (card is StackPanel
+                or System.Windows.Controls.TextBlock
+                or Wpf.Ui.Controls.TextBlock)
+                continue;
+
+            if (card.RenderTransform is not TranslateTransform)
+                card.RenderTransform = new TranslateTransform();
+
+            card.Opacity = 0;
+            ((TranslateTransform)card.RenderTransform).Y = RiseY;
+
+            int delay = i * StaggerMs;
+
+            var rise = new DoubleAnimation(0, RiseY, TimeSpan.FromMilliseconds(280))
+            {
+                BeginTime = TimeSpan.FromMilliseconds(delay),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                FillBehavior = FillBehavior.HoldEnd,
+            };
+            var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(280))
+            {
+                BeginTime = TimeSpan.FromMilliseconds(delay),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                FillBehavior = FillBehavior.HoldEnd,
+            };
+
+            card.BeginAnimation(TranslateTransform.YProperty, rise);
+            card.BeginAnimation(UIElement.OpacityProperty, fade);
+        }
+    }
+
+    /// <summary>
+    /// Прямые дочерние элементы контейнера страницы — это и есть карточки.
+    /// Глубже не идём: у ItemsControl внутри карточек десятки элементов, и
+    /// каскад по ним дал бы «мельтешение» вместо аккуратного раскрытия.
+    /// </summary>
+    private static List<FrameworkElement> CollectTopLevelCards(DependencyObject root)
+    {
+        var result = new List<FrameworkElement>();
+
+        // VisualTreeHelper, а не LogicalTreeHelper: у него нет методов
+        // GetChildrenCount/GetChild (они в WPF-UI-обёртке), и при этом он
+        // отдаёт именно отрендеренные элементы, а не логические узлы.
+        // При Loaded дерево визуализации уже построено - страницу мы
+        // анимируем по DispatcherPriority.Loaded, после отрисовки.
+        int count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            if (VisualTreeHelper.GetChild(root, i) is FrameworkElement fe
+                && fe.Visibility == Visibility.Visible)
+            {
+                result.Add(fe);
+            }
+        }
+        return result;
     }
 
     private static FrameworkElement? FindPageContent(DependencyObject root)

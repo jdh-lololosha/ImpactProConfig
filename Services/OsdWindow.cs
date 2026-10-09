@@ -220,6 +220,21 @@ internal sealed class OsdWindow : Window
             Foreground = Brushes.White,
             VerticalAlignment = VerticalAlignment.Center,
         };
+
+        // Пульсация иконки батареи, но только пока она заряжается: при
+        // разряде мигание означало бы «тревога» там, где её быть не должно.
+        // Только Opacity - это GPU-путь, в отличие от Effect или Blur.
+        if (info.Charging)
+        {
+            battery.BeginAnimation(
+                UIElement.OpacityProperty,
+                new DoubleAnimation(0.55, 1.0, TimeSpan.FromMilliseconds(800))
+                {
+                    AutoReverse = true,
+                    RepeatBehavior = RepeatBehavior.Forever,
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                });
+        }
         var chip = new Border
         {
             CornerRadius = new CornerRadius(8),
@@ -282,7 +297,14 @@ internal sealed class OsdWindow : Window
             },
             Child = panel,
         };
-        border.RenderTransform = new TranslateTransform();
+        // TransformGroup, а не голый TranslateTransform: прилёт OSD теперь
+        // анимирует и Y, и Scale (MotionOsdEnter). Обе трансформации должны
+        // жить в одной группе - иначе путь до ScaleX не разрешится.
+        // Порядок важен: [0] = Translate (Y), [1] = Scale. Storyboard
+        // в Motion.xaml обращается к Children[1] именно как к ScaleTransform.
+        border.RenderTransform = new TransformGroup();
+        ((TransformGroup)border.RenderTransform).Children.Add(new TranslateTransform());
+        ((TransformGroup)border.RenderTransform).Children.Add(new ScaleTransform(1, 1));
         return border;
     }
 }

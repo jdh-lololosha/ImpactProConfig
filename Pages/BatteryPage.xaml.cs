@@ -18,6 +18,9 @@ public partial class BatteryPage : Page
     private BatteryViewModel? _vm;
     private MainViewModel? _main;
 
+    /// <summary>Линия вычерчивается один раз за жизнь страницы.</summary>
+    private bool _revealPlayed;
+
     public BatteryPage()
     {
         InitializeComponent();
@@ -43,6 +46,13 @@ public partial class BatteryPage : Page
             WindowCombo.SelectedIndex = 0;
 
         PushSamples();
+
+        // Вычерчивание один раз за жизнь страницы.
+        if (!_revealPlayed)
+        {
+            _revealPlayed = true;
+            Chart.BeginReveal();
+        }
 
         // Пересчёт по событию батареи: она приходит раз в несколько минут,
         // график обязан подхватить новую точку.
