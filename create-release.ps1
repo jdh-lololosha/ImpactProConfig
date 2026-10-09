@@ -3,7 +3,11 @@
 param(
     [string]$Token     = $env:GH_TOKEN,
     [string]$Repo      = 'jdh-lololosha/ImpactProConfig',
-    [string]$Notes     = 'Release notes.'
+    [string]$Notes     = 'Release notes.',
+    # Заголовок релиза. Пусто -> "$Tag - Official Release", как было раньше.
+    # Строки держим ASCII-only: скрипт читается PowerShell 5.1 как ANSI
+    # (BOM нет), и кириллица в строковом литерале ломает разбор.
+    [string]$Title     = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,7 +24,7 @@ else { $version = $versionText.InnerText }
 $version = $version.Trim() -replace '^v', ''
 
 $Tag       = "v$version"
-$Title     = "$Tag - Official Release"
+if ([string]::IsNullOrWhiteSpace($Title)) { $Title = "$Tag - Official Release" }
 $ZipPath   = Join-Path $PSScriptRoot "ImpactProConfig-v$version-Portable.zip"
 Write-Host "RELEASE_TARGET tag=$Tag zip=$ZipPath"
 if (-not $Token) { throw 'No token (GH_TOKEN)' }
