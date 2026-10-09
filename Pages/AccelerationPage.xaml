@@ -6,9 +6,29 @@
       xmlns:controls="clr-namespace:ImpactProConfig.Controls">
 
     <Page.Resources>
-        <!-- Строка параметра: подпись слева, ползунок в середине, число справа. -->
+        <!-- Строка параметра: подпись слева, ползунок в середине, поле ввода справа. -->
         <Style x:Key="ParamRow" TargetType="{x:Type Grid}">
             <Setter Property="Margin" Value="0,6,0,6" />
+        </Style>
+
+        <!--
+            Поле ввода параметра. Один шаблон на ВСЕ параметры, чтобы границы
+            не разъезжались между строками: каждая строка задаёт Minimum и
+            Maximum сама, а вид и поведение — здесь.
+
+            AcceptsExpression="True" включает ввод с клавиатуры: без него
+            NumberBox крутится только стрелками, и «вписать число руками»
+            было бы невозможно.
+
+            Ширина 120: значение с шагом 0.0001 (Acceleration) не влезает в
+            90, а текст вроде «0.0001» обрезался бы.
+        -->
+        <Style x:Key="ParamNumberBox" TargetType="{x:Type ui:NumberBox}">
+            <Setter Property="Margin" Value="10,0,0,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="AcceptsExpression" Value="True" />
+            <Setter Property="SmallChange" Value="0.05" />
+            <Setter Property="Width" Value="120" />
         </Style>
     </Page.Resources>
 
@@ -197,14 +217,17 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Sens Multiplier (X)" VerticalAlignment="Center" />
                             <Slider Grid.Column="1" Minimum="0.1" Maximum="4.0"
                                     TickFrequency="0.05" IsSnapToTickEnabled="False"
                                     Value="{Binding HorizontalSensMultiplier, Mode=TwoWay}" />
-                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
-                                       Text="{Binding HorizontalSensMultiplier, StringFormat={}{0:0.###}}" />
+                            <ui:NumberBox Grid.Column="2"
+                                          Style="{StaticResource ParamNumberBox}"
+                                          Minimum="0.01" Maximum="100"
+                                          SmallChange="0.05"
+                                          Value="{Binding HorizontalSensMultiplier, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
                         <!-- Множитель чувствительности Y -->
@@ -212,13 +235,16 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Sens Multiplier (Y)" VerticalAlignment="Center" />
                             <Slider Grid.Column="1" Minimum="0.1" Maximum="4.0"
                                     Value="{Binding VerticalSensMultiplier, Mode=TwoWay}" />
-                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
-                                       Text="{Binding VerticalSensMultiplier, StringFormat={}{0:0.###}}" />
+                            <ui:NumberBox Grid.Column="2"
+                                          Style="{StaticResource ParamNumberBox}"
+                                          Minimum="0.01" Maximum="100"
+                                          SmallChange="0.05"
+                                          Value="{Binding VerticalSensMultiplier, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
                         <!-- Acceleration -->
@@ -226,13 +252,17 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Acceleration" VerticalAlignment="Center" />
                             <Slider Grid.Column="1" Minimum="0.0001" Maximum="0.2"
                                     Value="{Binding Acceleration, Mode=TwoWay}" />
-                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
-                                       Text="{Binding Acceleration, StringFormat={}{0:0.####}}" />
+                            <ui:NumberBox Grid.Column="2"
+                                          Style="{StaticResource ParamNumberBox}"
+                                          Minimum="0.0001" Maximum="1"
+                                          SmallChange="0.001"
+                                          MaxDecimalPlaces="4"
+                                          Value="{Binding Acceleration, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
                         <!-- Cap: порог -->
@@ -240,13 +270,17 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Cap (порог)" VerticalAlignment="Center" />
                             <Slider Grid.Column="1" Minimum="1" Maximum="60"
                                     Value="{Binding CapSpeed, Mode=TwoWay}" />
-                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
-                                       Text="{Binding CapSpeed, StringFormat={}{0:0.##}}" />
+                            <ui:NumberBox Grid.Column="2"
+                                          Style="{StaticResource ParamNumberBox}"
+                                          Minimum="0.1" Maximum="1000"
+                                          SmallChange="0.5"
+                                          MaxDecimalPlaces="2"
+                                          Value="{Binding CapSpeed, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
                         <!-- Cap: усиление после порога -->
@@ -254,13 +288,17 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Cap (усиление)" VerticalAlignment="Center" />
                             <Slider Grid.Column="1" Minimum="0.1" Maximum="5"
                                     Value="{Binding CapGain, Mode=TwoWay}" />
-                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
-                                       Text="{Binding CapGain, StringFormat={}{0:0.##}}" />
+                            <ui:NumberBox Grid.Column="2"
+                                          Style="{StaticResource ParamNumberBox}"
+                                          Minimum="0.01" Maximum="50"
+                                          SmallChange="0.05"
+                                          MaxDecimalPlaces="3"
+                                          Value="{Binding CapGain, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
                         <!-- Offset: вход -->
@@ -268,13 +306,17 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Offset (вход)" VerticalAlignment="Center" />
-                            <Slider Grid.Column="1" Minimum="-10" Maximum="10"
+                            <Slider Grid.Column="1" Minimum="0" Maximum="100"
                                     Value="{Binding InputOffset, Mode=TwoWay}" />
-                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
-                                       Text="{Binding InputOffset, StringFormat={}{0:0.###}}" />
+                            <ui:NumberBox Grid.Column="2"
+                                          Style="{StaticResource ParamNumberBox}"
+                                          Minimum="0" Maximum="1000"
+                                          SmallChange="0.5"
+                                          MaxDecimalPlaces="3"
+                                          Value="{Binding InputOffset, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
                         <!-- Offset: выход -->
@@ -282,13 +324,17 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Offset (выход)" VerticalAlignment="Center" />
-                            <Slider Grid.Column="1" Minimum="-10" Maximum="10"
+                            <Slider Grid.Column="1" Minimum="0" Maximum="100"
                                     Value="{Binding OutputOffset, Mode=TwoWay}" />
-                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
-                                       Text="{Binding OutputOffset, StringFormat={}{0:0.###}}" />
+                            <ui:NumberBox Grid.Column="2"
+                                          Style="{StaticResource ParamNumberBox}"
+                                          Minimum="0" Maximum="1000"
+                                          SmallChange="0.5"
+                                          MaxDecimalPlaces="3"
+                                          Value="{Binding OutputOffset, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
                         <!-- Power -->
@@ -296,13 +342,17 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Power" VerticalAlignment="Center" />
                             <Slider Grid.Column="1" Minimum="0.01" Maximum="1.0"
                                     Value="{Binding PowerExponent, Mode=TwoWay}" />
-                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
-                                       Text="{Binding PowerExponent, StringFormat={}{0:0.###}}" />
+                            <ui:NumberBox Grid.Column="2"
+                                          Style="{StaticResource ParamNumberBox}"
+                                          Minimum="0.01" Maximum="1"
+                                          SmallChange="0.01"
+                                          MaxDecimalPlaces="3"
+                                          Value="{Binding PowerExponent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
                         <!-- Snap angle: апстрим валидирует 0..45 -->
@@ -310,13 +360,17 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Привязка к углам, °" VerticalAlignment="Center" />
                             <Slider Grid.Column="1" Minimum="0" Maximum="45"
                                     Value="{Binding SnapAngle, Mode=TwoWay}" />
-                            <TextBlock Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center"
-                                       Text="{Binding SnapAngle, StringFormat={}{0:0}}" />
+                            <ui:NumberBox Grid.Column="2"
+                                          Style="{StaticResource ParamNumberBox}"
+                                          Minimum="0" Maximum="45"
+                                          SmallChange="1"
+                                          MaxDecimalPlaces="2"
+                                          Value="{Binding SnapAngle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 
                                                 <!-- Сглаживание Jump. Значение вводится руками с клавиатуры
@@ -338,12 +392,11 @@
                                     SmallChange="0.05"
                                     Value="{Binding Smooth, Mode=TwoWay}" />
                             <ui:NumberBox Grid.Column="2"
-                                          Margin="10,0,0,0"
-                                          VerticalAlignment="Center"
+                                          Style="{StaticResource ParamNumberBox}"
                                           Minimum="{Binding SmoothMin}"
                                           Maximum="{Binding SmoothMax}"
                                           SmallChange="0.05"
-                                          AcceptsExpression="True"
+                                          MaxDecimalPlaces="3"
                                           Value="{Binding Smooth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
 <ui:Button Content="Применить"

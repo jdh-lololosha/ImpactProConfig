@@ -284,16 +284,49 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         }
     }
 
+    // ====== Границы параметров ======
+    // Заданы здесь, а не только в XAML: ручной ввод может обойти Minimum/
+    // Maximum NumberBox (вставка из буфера, арифметическое выражение), и без
+    // проверки в сеттере значение ушло бы в settings.json, а driver отверг бы
+    // его при активации - сообщение об ошибке пришло бы отдельным окном
+    // writer.exe. Все ограничения взяты из common/rawaccel-validate.hpp.
+    private const double MinSens = 0.01;      // output DPI ratio must be positive
+    private const double MaxSens = 100;
+    private const double MinAccel = 0.0001;   // acceleration must be positive
+    private const double MaxAccel = 1;
+    private const double MinCapSpeed = 0.1;   // cap (input) can not be negative/0
+    private const double MaxCapSpeed = 1000;
+    private const double MinCapGain = 0.01;   // cap (output) must be positive
+    private const double MaxCapGain = 50;
+    private const double MinOffset = 0;       // offset can not be negative
+    private const double MaxOffset = 1000;
+    private const double MinPower = 0.01;     // exponent must be positive
+    private const double MaxPower = 1;
+    private const double MinSnap = 0;         // snap angle must be between 0 and 45
+    private const double MaxSnap = 45;
+
+    /// <summary>
+    /// Прижим к диапазону с обработкой NaN и бесконечностей.
+    /// Math.Clamp для NaN возвращает NaN, а не границу: введённое руками
+    /// "не число" уехало бы в файл и утащило за собой весь расход кривой.
+    /// </summary>
+    private static double Clamp(double value, double min, double max)
+    {
+        if (double.IsNaN(value)) return min;
+        if (value < min) return min;
+        if (value > max) return max;
+        return value;
+    }
     public double HorizontalSensMultiplier
     {
         get => _horizontalSens;
-        set { if (Set(ref _horizontalSens, value) && _settings != null) _settings.HorizontalSensMultiplier = value; }
+        set { double c = Clamp(value, MinSens, MaxSens); if (Set(ref _horizontalSens, c) && _settings != null) _settings.HorizontalSensMultiplier = c; }
     }
 
     public double VerticalSensMultiplier
     {
         get => _verticalSens;
-        set { if (Set(ref _verticalSens, value) && _settings != null) _settings.VerticalSensMultiplier = value; }
+        set { double c = Clamp(value, MinSens, MaxSens); if (Set(ref _verticalSens, c) && _settings != null) _settings.VerticalSensMultiplier = c; }
     }
 
     public double Acceleration
@@ -301,8 +334,8 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         get => _acceleration;
         set
         {
-            if (!Set(ref _acceleration, value)) return;
-            if (_settings != null) _settings.Acceleration = value;
+            if (!Set(ref _acceleration, Clamp(value, MinAccel, MaxAccel))) return;
+            if (_settings != null) _settings.Acceleration = _acceleration;
             OnPropertyChanged(nameof(GraphArgs));
             CurveRevision++;
         }
@@ -313,8 +346,8 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         get => _inputOffset;
         set
         {
-            if (!Set(ref _inputOffset, value)) return;
-            if (_settings != null) _settings.InputOffset = value;
+            if (!Set(ref _inputOffset, Clamp(value, MinOffset, MaxOffset))) return;
+            if (_settings != null) _settings.InputOffset = _inputOffset;
             OnPropertyChanged(nameof(GraphArgs));
             CurveRevision++;
         }
@@ -325,8 +358,8 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         get => _outputOffset;
         set
         {
-            if (!Set(ref _outputOffset, value)) return;
-            if (_settings != null) _settings.OutputOffset = value;
+            if (!Set(ref _outputOffset, Clamp(value, MinOffset, MaxOffset))) return;
+            if (_settings != null) _settings.OutputOffset = _outputOffset;
             OnPropertyChanged(nameof(GraphArgs));
             CurveRevision++;
         }
@@ -337,8 +370,8 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         get => _powerExponent;
         set
         {
-            if (!Set(ref _powerExponent, value)) return;
-            if (_settings != null) _settings.PowerExponent = value;
+            if (!Set(ref _powerExponent, Clamp(value, MinPower, MaxPower))) return;
+            if (_settings != null) _settings.PowerExponent = _powerExponent;
             OnPropertyChanged(nameof(GraphArgs));
             CurveRevision++;
         }
@@ -349,8 +382,8 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         get => _capSpeed;
         set
         {
-            if (!Set(ref _capSpeed, value)) return;
-            if (_settings != null) _settings.CapSpeed = value;
+            if (!Set(ref _capSpeed, Clamp(value, MinCapSpeed, MaxCapSpeed))) return;
+            if (_settings != null) _settings.CapSpeed = _capSpeed;
             OnPropertyChanged(nameof(GraphArgs));
             CurveRevision++;
         }
@@ -361,8 +394,8 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         get => _capGain;
         set
         {
-            if (!Set(ref _capGain, value)) return;
-            if (_settings != null) _settings.CapGain = value;
+            if (!Set(ref _capGain, Clamp(value, MinCapGain, MaxCapGain))) return;
+            if (_settings != null) _settings.CapGain = _capGain;
             OnPropertyChanged(nameof(GraphArgs));
             CurveRevision++;
         }
@@ -372,7 +405,7 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
     public double SnapAngle
     {
         get => _snapAngle;
-        set { if (Set(ref _snapAngle, value) && _settings != null) _settings.SnapAngle = value; }
+        set { double c = Clamp(value, MinSnap, MaxSnap); if (Set(ref _snapAngle, c) && _settings != null) _settings.SnapAngle = c; }
     }
 
     /// <summary>
