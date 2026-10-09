@@ -319,7 +319,34 @@
                                        Text="{Binding SnapAngle, StringFormat={}{0:0}}" />
                         </Grid>
 
-                        <ui:Button Content="Применить"
+                                                <!-- Сглаживание Jump. Значение вводится руками с клавиатуры
+                             (AllowTyping), работает и ползунок. Диапазон 0…1 - тот
+                             же, что проверяет апстрим (common/rawaccel-validate.hpp:
+                             "smooth must be between 0 and 1"). -->
+                        <Grid Style="{StaticResource ParamRow}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="120" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="Сглаживание" />
+                                <TextBlock Text="0 - ступенька, 1 - плавный переход"
+                                           FontSize="10" Opacity="0.45" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Slider Grid.Column="1" Minimum="0" Maximum="1"
+                                    SmallChange="0.05"
+                                    Value="{Binding Smooth, Mode=TwoWay}" />
+                            <ui:NumberBox Grid.Column="2"
+                                          Margin="10,0,0,0"
+                                          VerticalAlignment="Center"
+                                          Minimum="{Binding SmoothMin}"
+                                          Maximum="{Binding SmoothMax}"
+                                          SmallChange="0.05"
+                                          AcceptsExpression="True"
+                                          Value="{Binding Smooth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </Grid>
+<ui:Button Content="Применить"
                                    HorizontalAlignment="Right"
                                    Margin="0,14,0,0"
                                    Click="Apply_Click"

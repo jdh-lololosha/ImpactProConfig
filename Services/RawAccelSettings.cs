@@ -65,6 +65,19 @@ internal sealed class RawAccelSettings
     private const string KGainVelocity = "Gain / Velocity";
 
     /// <summary>
+    /// Сглаживание ступеньки Jump.
+    ///
+    /// Диапазон 0…1 подтверждён по common/rawaccel-validate.hpp:
+    /// "smooth must be between 0 and 1". При smooth = 0 сглаживание выключено
+    /// и Jump даёт настоящую ступеньку; чем ближе к 1, тем положе переход.
+    /// </summary>
+    private const string KSmooth = "smooth";
+
+    /// <summary>Границы сглаживания — те же, что валидирует апстрим.</summary>
+    public const double SmoothMin = 0.0;
+    public const double SmoothMax = 1.0;
+
+    /// <summary>
     /// Соответствие «тип кривой в GUI» -> «mode в settings.json».
     /// Отдельного значения "linear" у апстрима НЕТ: GUI-кривая Linear — это
     /// mode=classic с exponentClassic=2 (grapher/Models/Options/AccelTypeOptions).
@@ -194,6 +207,38 @@ internal sealed class RawAccelSettings
     {
         get => _accel[KGainVelocity]?.GetValue<bool>() ?? false;
         set => _accel[KGainVelocity] = value;
+    }
+
+    /// <summary>
+    /// Прижимает значение к диапазону 0…1.
+    ///
+    /// Math.Clamp здесь НЕЛЬЗЯ вызывать напрямую: для NaN он возвращает NaN,
+    /// а не границу. Значение «не число» из ручного ввода или битый JSON уехали
+    /// бы на диск, и расход Jump сломался бы (NaN в smooth_rate уводит кривую
+    /// в NaN целиком). Поэтому NaN и бесконечности разбираем явно.
+    /// </summary>
+    internal static double ClampSmooth(double value)
+    {
+        if (double.IsNaN(value)) return 0.5;      // дефолт апстрима
+        if (value < SmoothMin) return SmoothMin;
+        if (value > SmoothMax) return SmoothMax;
+        return value;
+    }
+
+    /// <summary>
+    /// Сглаживание ступеньки Jump, 0…1.
+    ///
+    /// Прижимается к диапазону ДО записи: апстрим проверяет его при активации
+    /// и откажется применять конфиг со значением вне 0…1, причём сообщение
+    /// придёт отдельным окном writer.exe. Лучше не дать невалидное значение
+    /// уйти на диск.
+    ///
+    /// 0 — ступенька без сглаживания, 1 — максимально пологий переход.
+    /// </summary>
+    public double Smooth
+    {
+        get => ClampSmooth(GetDouble(_accel, KSmooth, 0.5));
+        set => SetDouble(_accel, KSmooth, ClampSmooth(value));
     }
 
     /// <summary>Вращение, градусы (апстрим принимает 0..360).</summary>

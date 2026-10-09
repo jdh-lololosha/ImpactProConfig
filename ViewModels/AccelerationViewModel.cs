@@ -43,6 +43,12 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
     private double _snapAngle;
 
     /// <summary>
+    /// Сглаживание ступеньки Jump, 0…1. Ручной ввод разрешён: у NumberBox
+    /// включён текстовый режим, значение можно и ползунком, и числом.
+    /// </summary>
+    private double _smooth = 0.5;
+
+    /// <summary>
     /// Версия графика. Инкремент при каждом изменении параметра кривой —
     /// это единственное, на что подписан CurveChart через
     /// <see cref="CurveRevision"/>. Так вместо 400 точек через границу
@@ -184,6 +190,7 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
                 ExponentPower = _powerExponent,
                 CapX = _capSpeed,
                 CapY = _capGain,
+                Smooth = _smooth,
                 Gain = _gainVelocity,
             };
         }
@@ -368,6 +375,33 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         set { if (Set(ref _snapAngle, value) && _settings != null) _settings.SnapAngle = value; }
     }
 
+    /// <summary>
+    /// Сглаживание ступеньки Jump, 0…1. Принимается и из ползунка, и из
+    /// ручного ввода в NumberBox, поэтому значение прижимается к диапазону
+    /// ЗДЕСЬ, а не только при записи: иначе введённое «5» жило бы в UI до
+    /// нажатия «Применить», и график рисовал бы ерунду.
+    /// </summary>
+    public double Smooth
+    {
+        get => _smooth;
+        set
+        {
+            // ClampSmooth, а не Math.Clamp: тот для NaN возвращает NaN, и введённое
+            // с клавиатуры «не число» жило бы в UI и уехало бы в график.
+            double clamped = RawAccelSettings.ClampSmooth(value);
+            if (!Set(ref _smooth, clamped)) return;
+            if (_settings != null) _settings.Smooth = clamped;
+            OnPropertyChanged(nameof(GraphArgs));
+            CurveRevision++;
+        }
+    }
+
+    /// <summary>Нижняя граница ручного ввода сглаживания.</summary>
+    public double SmoothMin => RawAccelSettings.SmoothMin;
+
+    /// <summary>Верхняя граница ручного ввода сглаживания.</summary>
+    public double SmoothMax => RawAccelSettings.SmoothMax;
+
     // ---------------- логика ----------------
 
     private string InstallDir
@@ -472,6 +506,10 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         _exponentClassic = _curve == RawAccelCurve.Linear ? 2.0 : 3.0;
         _gainVelocity = loaded.GainVelocity;
 
+        // Сглаживание читаем из файла, а не оставляем дефолт 0.5: иначе
+        // значение, выставленное в апстрим-GUI, молча заменялось бы наше.
+        _smooth = loaded.Smooth;
+
         OnPropertyChanged(nameof(SelectedCurve));
         OnPropertyChanged(nameof(SelectedCurveIndex));
         OnPropertyChanged(nameof(HorizontalSensMultiplier));
@@ -483,6 +521,7 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CapSpeed));
         OnPropertyChanged(nameof(CapGain));
         OnPropertyChanged(nameof(SnapAngle));
+        OnPropertyChanged(nameof(Smooth));
         OnPropertyChanged(nameof(GraphArgs));
         OnPropertyChanged(nameof(GraphMode));
         OnPropertyChanged(nameof(CurveColor));
