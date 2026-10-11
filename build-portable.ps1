@@ -20,9 +20,12 @@ if (-not $versionText) { throw "Version not found in $csprojPath" }
 if ($versionText -is [string]) { $productVersion = $versionText }
 else { $productVersion = $versionText.InnerText }
 $productVersion = $productVersion.Trim() -replace '^v', ''
-if ($productVersion -notmatch '^\d+\.\d+\.\d+$') {
-    throw "Version '$productVersion' is not strict SemVer (expected X.Y.Z)"
+if ($productVersion -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
+    throw "Version '$productVersion' is not strict SemVer (expected X.Y.Z[.N])"
 }
+# Имя файла — первые 3 компонента (X.Y.Z); Revision (1.3.2.1) в имя не идёт,
+# assembly version остаётся 4-компонентной для апдейтера.
+$fileVersion = ($productVersion -split '\.')[0..2] -join '.'
 
 $exe = Join-Path $PublishDir 'ImpactProConfig.exe'
 if (-not (Test-Path $exe)) { throw "Publish dir not found or no ImpactProConfig.exe: $PublishDir" }
@@ -91,7 +94,7 @@ if (-not (Test-Path (Join-Path $PublishDir 'hidusb.dll'))) { throw "hidusb.dll m
 # цель PublishUpdater основного csproj при `dotnet publish`.
 if (-not (Test-Path (Join-Path $PublishDir 'Updater.exe'))) { throw "Updater.exe missing in publish dir! (dotnet publish основного проекта собирает его в Updater\)" }
 
-$OutZip = Join-Path $PSScriptRoot "ImpactProConfig-v$productVersion-Portable.zip"
+$OutZip = Join-Path $PSScriptRoot "ImpactProConfig-v$fileVersion-Portable.zip"
 
 # Чистим старый архив, иначе Copy-Into-Archive оставляет прошлые файлы версии.
 Remove-Item -LiteralPath $OutZip -Force -ErrorAction SilentlyContinue

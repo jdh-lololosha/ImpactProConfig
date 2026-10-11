@@ -23,10 +23,13 @@ if (-not $versionText) { throw "Version not found in $csprojPath" }
 if ($versionText -is [string]) { $productVersion = $versionText }
 else { $productVersion = $versionText.InnerText }
 $productVersion = $productVersion.Trim() -replace '^v', ''
-if ($productVersion -notmatch '^\d+\.\d+\.\d+$') {
-    throw "Version '$productVersion' is not strict SemVer (expected X.Y.Z)"
+if ($productVersion -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
+    throw "Version '$productVersion' is not strict SemVer (expected X.Y.Z[.N])"
 }
-$OutMsi = Join-Path $PSScriptRoot "ImpactProConfig-v$productVersion-Setup.msi"
+# Имя файла — первые 3 компонента (X.Y.Z); Revision (1.3.2.1) в имя не идёт,
+# assembly version остаётся 4-компонентной для апдейтера.
+$fileVersion = ($productVersion -split '\.')[0..2] -join '.'
+$OutMsi = Join-Path $PSScriptRoot "ImpactProConfig-v$fileVersion-Setup.msi"
 
 $exe = Join-Path $PublishDir 'ImpactProConfig.exe'
 if (-not (Test-Path $exe)) { throw "Publish dir not found or no ImpactProConfig.exe: $PublishDir" }
