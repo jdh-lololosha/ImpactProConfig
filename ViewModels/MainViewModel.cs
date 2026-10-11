@@ -539,6 +539,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Тег релиза, например «v1.2.0». Показывается в окне апдейтера.</summary>
     public string? UpdateVersion { get; private set; }
 
+    private string _updateCheckError = string.Empty;
+
+    /// <summary>
+    /// Ошибка последней ручной проверки обновлений (пусто — ошибки нет).
+    /// Показывается в Настройках под кнопкой «Обновить».
+    /// </summary>
+    public string UpdateCheckError
+    {
+        get => _updateCheckError;
+        private set => Set(ref _updateCheckError, value);
+    }
+
     /// <summary>Просьба закрыть приложение (после запуска портативного обновления).</summary>
     public event Action? ExitRequested;
 
@@ -567,6 +579,55 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         UpdateVersion = info.Tag;
         UpdateMessage = $"{info.Tag} (у вас {UpdateService.CurrentVersion.ToString(3)})";
         IsUpdateAvailable = true;
+    }
+
+    /// <summary>
+    /// Ручная проверка из Настроек (кнопка «Обновить»). Возвращает результат и
+    /// пишет ошибку в <see cref="UpdateCheckError"/> — в отличие от фоновой
+    /// проверки, где сетевые проблемы молча игнорируются.
+    /// </summary>
+    public async Task CheckForUpdatesWithResultAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var info = await new UpdateService().CheckAsync();
+
+            if (info is null)
+            {
+                // CheckAsync вернул null при ошибке сети/HTTP — текст в логе.
+                UpdateCheckError = "Не удалось проверить обновления: сеть недоступна или превышен лимит GitHub API (60 запросов/час без токена).";
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(info.Error))
+            {
+                UpdateCheckError = $"Ошибка проверки обновлений: {info.Error}";
+                return;
+            }
+
+            if (!info.Available)
+            {
+                UpdateCheckError = string.Empty;
+                return;
+            }
+
+            if (string.IsNullOrEmpty(info.Url))
+            {
+                UpdateCheckError = $"Найден релиз {info.Tag}, но в нём нет .zip — скачать нечего.";
+                return;
+            }
+
+            UpdateCheckError = string.Empty;
+            UpdateDownloadUrl = info.Url;
+            UpdateVersion = info.Tag;
+            UpdateMessage = $"{info.Tag} (у вас {UpdateService.CurrentVersion.ToString(3)})";
+            IsUpdateAvailable = true;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     /// <summary>

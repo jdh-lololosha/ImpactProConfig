@@ -155,6 +155,86 @@
                 </StackPanel>
             </ui:Card>
 
+            <!-- Обновления -->
+            <ui:Card Padding="18" Margin="0,14,0,0">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Обновления"
+                                   FontWeight="SemiBold"
+                                   FontSize="15" />
+                        <ui:Button Grid.Column="1"
+                                   Content="Обновить"
+                                   Appearance="Secondary"
+                                   Click="CheckUpdate_Click" />
+                    </Grid>
+
+                    <TextBlock Text="{Binding UpdateMessage}"
+                               FontWeight="SemiBold"
+                               FontSize="13"
+                               Margin="0,10,0,0"
+                               TextWrapping="Wrap">
+                        <TextBlock.Style>
+                            <Style TargetType="{x:Type TextBlock}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsUpdateAvailable}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <ui:Button Content="Скачать и установить"
+                               Appearance="Primary"
+                               HorizontalAlignment="Left"
+                               MinWidth="180"
+                               Margin="0,8,0,0"
+                               Click="InstallUpdate_Click">
+                        <ui:Button.Style>
+                            <Style TargetType="{x:Type ui:Button}" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsUpdateAvailable}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ui:Button.Style>
+                    </ui:Button>
+
+                    <TextBlock Text="{Binding UpdateCheckError}"
+                               Foreground="#FF5C5C"
+                               FontSize="12"
+                               Margin="0,8,0,0"
+                               TextWrapping="Wrap">
+                        <TextBlock.Style>
+                            <Style TargetType="{x:Type TextBlock}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding UpdateCheckError}" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding UpdateCheckError}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <TextBlock Text="Проверка обновлений идёт через публичный GitHub API без токена: лимит 60 запросов в час. Ошибка «rate limit» — превышение лимита, повторите позже."
+                               Opacity="0.5"
+                               FontSize="11"
+                               Margin="0,10,0,0"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </ui:Card>
+
             <!-- Сопряжение с донглом (2.4G Re-Pairing) -->
             <ui:Card Padding="18" Margin="0,14,0,0">
                 <StackPanel>

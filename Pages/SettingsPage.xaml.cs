@@ -49,4 +49,22 @@ public partial class SettingsPage : Page
         };
         dialog.ShowDialog();
     }
+
+    /// <summary>«Обновить»: ручная проверка GitHub Releases с показом ошибки.</summary>
+    private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (Application.Current.MainWindow is not MainWindow mw || mw.ViewModel.IsBusy)
+            return;
+
+        await mw.ViewModel.CheckForUpdatesWithResultAsync();
+    }
+
+    /// <summary>«Скачать и установить»: портативное обновление через Updater.exe.</summary>
+    private async void InstallUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (Application.Current.MainWindow is not MainWindow mw || mw.ViewModel.IsBusy)
+            return;
+
+        await mw.ViewModel.InstallUpdateAsync();
+    }
 }
