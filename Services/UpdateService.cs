@@ -218,9 +218,13 @@ internal sealed class UpdateService
         return Version.TryParse(cleaned, out var v) ? v : null;
     }
 
-    /// <summary>Собрать версию 1.2.3 из 1.2.3.0 — иначе 1.2.3 < 1.2.3.0 ложно.</summary>
+    /// <summary>
+    /// Нормализует версию для сравнения: 1.2.3.0 → 1.2.3, но Revision сохраняет.
+    /// Иначе 1.3.2.1 (хотфикс) невозможно отличить от 1.3.2 — апдейтер молчит.
+    /// </summary>
     private static Version StripBuild(Version v) =>
-        new(v.Major, Math.Max(v.Minor, 0), Math.Max(v.Build, 0));
+        new(v.Major, Math.Max(v.Minor, 0), Math.Max(v.Build, 0),
+            Math.Max(v.Revision, 0));
 
     /// <summary>Найти .zip среди вложений релиза (портативная сборка).</summary>
     private static string? FindZipAsset(JsonElement release)
