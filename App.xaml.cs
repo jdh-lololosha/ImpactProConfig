@@ -168,8 +168,45 @@ public partial class App : Application
             ? System.Windows.Media.VisualTreeHelper.GetParent(o)
             : LogicalTreeHelper.GetParent(o);
 
+    /// <summary>Именованный Mutex: приложение не запускается дважды.</summary>
+    private static Mutex? _singleInstanceMutex;
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    private const int SwRestore = 9;
+
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Single-instance: если приложение уже запущено — активируем его окно
+        // и завершаем этот процесс. Иначе двойной клик по ярлыку открывал
+        // вторую копию, и две сессии драли одну мышь по HID.
+        _singleInstanceMutex = new Mutex(true, "ImpactProConfig_SingleInstance_v1", out bool createdNew);
+        if (!createdNew)
+        {
+            try
+            {
+                var current = System.Diagnostics.Process.GetCurrentProcess();
+                foreach (var p in System.Diagnostics.Process.GetProcessesByName(current.ProcessName))
+                {
+                    if (p.Id == current.Id || p.MainWindowHandle == IntPtr.Zero)
+                        continue;
+                    ShowWindowAsync(p.MainWindowHandle, SwRestore);
+                    SetForegroundWindow(p.MainWindowHandle);
+                    break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"SingleInstance: {ex.Message}");
+            }
+            Shutdown();
+            return;
+        }
+
         DispatcherUnhandledException += OnDispatcherException;
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
             Log($"AppDomain: {args.ExceptionObject}");
