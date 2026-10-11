@@ -486,6 +486,10 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsDriverActive));
         OnPropertyChanged(nameof(ShowInstallCard));
 
+        // Первый запуск после переноса: подхватить старый settings.json из
+        // папки драйвера, если в App.DataDir его ещё нет.
+        RawAccelService.MigrateSettings(InstallDir);
+
         LoadSettings();
 
         OnPropertyChanged(nameof(CanInstall));
@@ -510,7 +514,8 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
 
     private void LoadSettings()
     {
-        string path = RawAccelService.SettingsPath(InstallDir);
+        // Настройки живут в App.DataDir — папка данных не затрагивается апдейтами.
+        string path = RawAccelService.DataDirSettingsPath();
         var loaded = RawAccelSettings.Load(path, out string? error);
 
         _settings = loaded;
@@ -660,7 +665,9 @@ internal sealed class AccelerationViewModel : INotifyPropertyChanged
             return;
         }
 
-        string path = RawAccelService.SettingsPath(InstallDir);
+        // Пишем в App.DataDir: settings.json рядом с rawaccel.exe затирается
+        // Updater.exe при распаковке обновления, а папка данных — нет.
+        string path = RawAccelService.DataDirSettingsPath();
         try
         {
             _settings.Save(path);

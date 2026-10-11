@@ -287,7 +287,8 @@
                     <StackPanel>
                         <TextBlock Text="Время отклика кнопок"
                                    FontWeight="SemiBold"
-                                   FontSize="14" />
+                                   FontSize="14"
+                                   ToolTip="Фильтрация дребезга контактов микриков для предотвращения случайных двойных кликов (дабл-кликов). Рекомендуется 2–4 мс." />
                         <Grid Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />

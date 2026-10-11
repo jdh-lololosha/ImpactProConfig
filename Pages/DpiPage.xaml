@@ -168,9 +168,24 @@
 
                                         <StackPanel Grid.Column="1">
                                             <Grid>
-                                            <Ellipse Width="12" Height="12"
-                                                     Fill="{Binding ColorBrush}"
-                                                     VerticalAlignment="Center" />
+                                            <!-- Кружок цвета ступени: клик открывает палитру -->
+                                            <Button Width="16"
+                                                    Height="16"
+                                                    VerticalAlignment="Center"
+                                                    Cursor="Hand"
+                                                    Click="DpiColor_Click"
+                                                    Tag="{Binding SlotIndex}"
+                                                    ToolTip="Цвет ступени DPI. Клик — выбрать цвет.">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="{x:Type Button}">
+                                                        <Ellipse Fill="{Binding ColorBrush}"
+                                                                 Stroke="#66FFFFFF"
+                                                                 StrokeThickness="1"
+                                                                 Width="16"
+                                                                 Height="16" />
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
                                             <!-- Метка текущей ступени устройства -->
                                             <Border HorizontalAlignment="Right"
                                                     CornerRadius="8"
@@ -276,28 +291,34 @@
                         <RadioButton Style="{StaticResource SegmentRadioButton}"
                                      Content="125 Гц"
                                      IsChecked="{Binding IsRate125, Mode=TwoWay}"
-                                     Margin="0,0,8,0" />
+                                     Margin="0,0,8,0"
+                                     ToolTip="Количество отчётов мыши в секунду. 1000 Гц даёт задержку 1 мс." />
                         <RadioButton Style="{StaticResource SegmentRadioButton}"
                                      Content="250 Гц"
                                      IsChecked="{Binding IsRate250, Mode=TwoWay}"
-                                     Margin="0,0,8,0" />
+                                     Margin="0,0,8,0"
+                                     ToolTip="Количество отчётов мыши в секунду. 1000 Гц даёт задержку 1 мс." />
                         <RadioButton Style="{StaticResource SegmentRadioButton}"
                                      Content="500 Гц"
                                      IsChecked="{Binding IsRate500, Mode=TwoWay}"
-                                     Margin="0,0,8,0" />
+                                     Margin="0,0,8,0"
+                                     ToolTip="Количество отчётов мыши в секунду. 1000 Гц даёт задержку 1 мс." />
                         <RadioButton Style="{StaticResource SegmentRadioButton}"
                                      Content="1000 Гц"
                                      IsChecked="{Binding IsRate1000, Mode=TwoWay}"
-                                     Margin="0,0,8,0" />
+                                     Margin="0,0,8,0"
+                                     ToolTip="Количество отчётов мыши в секунду. 1000 Гц даёт задержку 1 мс." />
                         <RadioButton Style="{StaticResource SegmentRadioButton}"
                                      Content="2000 Гц"
                                      IsChecked="{Binding IsRate2000, Mode=TwoWay}"
                                      IsEnabled="{Binding HighRatesAllowed}"
-                                     Margin="0,0,8,0" />
+                                     Margin="0,0,8,0"
+                                     ToolTip="Количество отчётов мыши в секунду. 1000 Гц даёт задержку 1 мс." />
                         <RadioButton Style="{StaticResource SegmentRadioButton}"
                                      Content="4000 Гц"
                                      IsChecked="{Binding IsRate4000, Mode=TwoWay}"
-                                     IsEnabled="{Binding HighRatesAllowed}" />
+                                     IsEnabled="{Binding HighRatesAllowed}"
+                                     ToolTip="Количество отчётов мыши в секунду. 1000 Гц даёт задержку 1 мс." />
                     </StackPanel>
                     <TextBlock Text="Выше частота — плавнее курсор, но выше нагрузка на радиоканал. 2000/4000 Гц доступны только на проводе."
                                Opacity="0.5"
@@ -325,7 +346,8 @@
                                   Width="120"
                                   MinWidth="110"
                                   ItemsSource="{Binding SensorModeItems}"
-                                  SelectedIndex="{Binding SensorModeIndex, Mode=TwoWay}" />
+                                  SelectedIndex="{Binding SensorModeIndex, Mode=TwoWay}"
+                                  ToolTip="HP (High Performance) — максимальная производительность сенсора. LP (Low Power) — режим энергосбережения батареи." />
                     </Grid>
 
                     <Grid Margin="0,4,0,8">
@@ -338,18 +360,22 @@
                                   Width="120"
                                   MinWidth="110"
                                   ItemsSource="{Binding LodItems}"
-                                  SelectedIndex="{Binding LodIndex, Mode=TwoWay}" />
+                                  SelectedIndex="{Binding LodIndex, Mode=TwoWay}"
+                                  ToolTip="Дистанция отрыва мыши от коврика, на которой сенсор перестаёт считывать поверхность (1 мм — стандарт для киберспорта, 2 мм — для неровных ковриков)." />
                     </Grid>
 
                     <ui:ToggleSwitch Content="Сглаживание движений"
                                      IsChecked="{Binding SmoothEnable, Mode=TwoWay}"
-                                     Margin="0,3" />
+                                     Margin="0,3"
+                                     ToolTip="Аппаратная фильтрация микро-джиттера сенсора на высоких значениях DPI." />
                     <ui:ToggleSwitch Content="Угловая привязка"
                                      IsChecked="{Binding AngleFixEnable, Mode=TwoWay}"
-                                     Margin="0,3" />
+                                     Margin="0,3"
+                                     ToolTip="Искусственное выравнивание движения курсора по прямым горизонтальным и вертикальным линиям." />
                     <ui:ToggleSwitch Content="Синхронизация движения"
                                      IsChecked="{Binding MotionSyncEnable, Mode=TwoWay}"
-                                     Margin="0,3" />
+                                     Margin="0,3"
+                                     ToolTip="Синхронизирует считывание кадров сенсора PixArt 3395 с тактами опроса USB для максимальной плавности." />
                 </StackPanel>
             </ui:Card>
 
@@ -412,13 +438,13 @@
                             <TextBlock HorizontalAlignment="Right"
                                        Opacity="0.7"
                                        VerticalAlignment="Center"
-                                       Text="{Binding LedBrightnessIndex, StringFormat={}{0}/10}" />
+                                       Text="{Binding LedBrightness, StringFormat={}{0}/255}" />
                         </Grid>
-                        <Slider Minimum="1"
-                                Maximum="10"
+                        <Slider Minimum="0"
+                                Maximum="255"
                                 SmallChange="1"
-                                LargeChange="2"
-                                Value="{Binding LedBrightnessIndex, Mode=TwoWay}"
+                                LargeChange="16"
+                                Value="{Binding LedBrightness, Mode=TwoWay}"
                                 Margin="0,14,0,0"
                                 IsEnabled="{Binding IsConnected}" />
                         <TextBlock Text="Яркость индикатора активного уровня DPI."
@@ -429,6 +455,114 @@
                     </StackPanel>
                 </Grid>
             </ui:Card>
+
+            <!-- ===== Палитра цвета ступени DPI ===== -->
+            <Popup x:Name="ColorPopup"
+                   Placement="Bottom"
+                   AllowsTransparency="True"
+                   StaysOpen="False"
+                   PopupAnimation="Fade"
+                   Closed="ColorPopup_Closed">
+                <Border Background="{StaticResource ImpactSurfaceBrush}"
+                        BorderBrush="{StaticResource ImpactStrokeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="16"
+                        SnapsToDevicePixels="True">
+                    <Border.Effect>
+                        <DropShadowEffect Color="#000000"
+                                          BlurRadius="16"
+                                          ShadowDepth="3"
+                                          Direction="270"
+                                          Opacity="0.6" />
+                    </Border.Effect>
+                    <StackPanel Width="240">
+                        <TextBlock Text="Цвет ступени DPI"
+                                   FontWeight="SemiBold"
+                                   FontSize="14"
+                                   Margin="0,0,0,10" />
+
+                        <!-- Быстрые пресеты -->
+                        <WrapPanel Margin="0,0,0,12">
+                            <Button Width="28" Height="28" Margin="0,0,6,6" Cursor="Hand"
+                                    Background="#FF0000" Tag="#FF0000" Click="PresetColor_Click"
+                                    ToolTip="Красный" />
+                            <Button Width="28" Height="28" Margin="0,0,6,6" Cursor="Hand"
+                                    Background="#FF8000" Tag="#FF8000" Click="PresetColor_Click"
+                                    ToolTip="Оранжевый" />
+                            <Button Width="28" Height="28" Margin="0,0,6,6" Cursor="Hand"
+                                    Background="#FFFF00" Tag="#FFFF00" Click="PresetColor_Click"
+                                    ToolTip="Жёлтый" />
+                            <Button Width="28" Height="28" Margin="0,0,6,6" Cursor="Hand"
+                                    Background="#00FF00" Tag="#00FF00" Click="PresetColor_Click"
+                                    ToolTip="Зелёный" />
+                            <Button Width="28" Height="28" Margin="0,0,6,6" Cursor="Hand"
+                                    Background="#00FFFF" Tag="#00FFFF" Click="PresetColor_Click"
+                                    ToolTip="Голубой" />
+                            <Button Width="28" Height="28" Margin="0,0,6,6" Cursor="Hand"
+                                    Background="#0000FF" Tag="#0000FF" Click="PresetColor_Click"
+                                    ToolTip="Синий" />
+                            <Button Width="28" Height="28" Margin="0,0,6,6" Cursor="Hand"
+                                    Background="#8000FF" Tag="#8000FF" Click="PresetColor_Click"
+                                    ToolTip="Фиолетовый" />
+                            <Button Width="28" Height="28" Margin="0,0,6,6" Cursor="Hand"
+                                    Background="#FFFFFF" Tag="#FFFFFF" Click="PresetColor_Click"
+                                    ToolTip="Белый" />
+                        </WrapPanel>
+
+                        <!-- HEX-ввод -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="HEX" VerticalAlignment="Center" Opacity="0.7" Margin="0,0,8,0" />
+                            <TextBox x:Name="ColorHexBox"
+                                     Grid.Column="1"
+                                     Padding="6,4"
+                                     MaxLength="9"
+                                     KeyDown="ColorHexBox_KeyDown"
+                                     LostFocus="ColorHexBox_LostFocus"
+                                     ToolTip="Цвет в формате #RRGGBB (например, #FF8000)." />
+                        </Grid>
+
+                        <!-- RGB-ввод -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,6,0">
+                                <TextBlock Text="R" Opacity="0.7" FontSize="11" Margin="0,0,0,3" />
+                                <ui:NumberBox x:Name="ColorRBox"
+                                              Minimum="0" Maximum="255" SmallChange="1"
+                                              ValueChanged="ColorRgbBox_ValueChanged"
+                                              ToolTip="Компонента цвета 0–255." />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="3,0">
+                                <TextBlock Text="G" Opacity="0.7" FontSize="11" Margin="0,0,0,3" />
+                                <ui:NumberBox x:Name="ColorGBox"
+                                              Minimum="0" Maximum="255" SmallChange="1"
+                                              ValueChanged="ColorRgbBox_ValueChanged"
+                                              ToolTip="Компонента цвета 0–255." />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Margin="6,0,0,0">
+                                <TextBlock Text="B" Opacity="0.7" FontSize="11" Margin="0,0,0,3" />
+                                <ui:NumberBox x:Name="ColorBBox"
+                                              Minimum="0" Maximum="255" SmallChange="1"
+                                              ValueChanged="ColorRgbBox_ValueChanged"
+                                              ToolTip="Компонента цвета 0–255." />
+                            </StackPanel>
+                        </Grid>
+
+                        <ui:Button Content="Готово"
+                                   Margin="0,14,0,0"
+                                   HorizontalAlignment="Right"
+                                   Click="CloseColorPopup_Click" />
+                    </StackPanel>
+                </Border>
+            </Popup>
         </Grid>
     </ScrollViewer>
 </Page>

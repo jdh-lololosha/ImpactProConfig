@@ -103,7 +103,8 @@
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="Спящий режим"
                                    FontWeight="SemiBold"
-                                   FontSize="15" />
+                                   FontSize="15"
+                                   ToolTip="Время бездействия мыши до перехода в режим глубокого сна для экономии заряда." />
                         <TextBlock Text="Отключение подсветки при простое (allLedOffTime)."
                                    Opacity="0.5"
                                    FontSize="11"

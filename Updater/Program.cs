@@ -231,6 +231,19 @@ internal static class Program
             if (dir is not null)
                 Directory.CreateDirectory(dir);
 
+            // settings.json НЕ затираем, если уже есть: в нём настройки
+            // пользователя (наше приложение теперь хранит их в App.DataDir,
+            // но апстрим-GUI драйвера пишет свой файл рядом с rawaccel.exe).
+            // Дефолт из архива распаковываем только при первом запуске.
+            if (string.Equals(entry.Name, "settings.json", StringComparison.OrdinalIgnoreCase)
+                && File.Exists(destination))
+            {
+                done++;
+                if (total > 0)
+                    splash.SetFraction((double)done / total);
+                continue;
+            }
+
             // overwrite: true обязателен — иначе повторная попытка после занятого файла
             // упадёт на «файл уже существует».
             entry.ExtractToFile(destination, overwrite: true);

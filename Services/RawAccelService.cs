@@ -160,6 +160,43 @@ internal static class RawAccelService
     public static string SettingsPath(string installDir) =>
         Path.Combine(installDir, SettingsFileName);
 
+    /// <summary>
+    /// Путь к нашим настройкам Raw Accel в папке данных приложения:
+    /// %LOCALAPPDATA%\ImpactProConfig\settings.json (рядом с app_settings.json
+    /// и battery_stats.json). Папка данных НЕ затрагивается Updater.exe при
+    /// распаковке обновлений, поэтому настройки переживают любые апдейты.
+    /// writer.exe получает этот путь абсолютным — читает и применяет ок.
+    /// </summary>
+    public static string DataDirSettingsPath() =>
+        Path.Combine(App.DataDir, SettingsFileName);
+
+    /// <summary>
+    /// Первый запуск после переноса: если в App.DataDir ещё нет settings.json,
+    /// а рядом с rawaccel.exe старый файл есть — копируем его, чтобы настройки
+    /// пользователя не потерялись. Молча пропускает любые ошибки доступа.
+    /// </summary>
+    public static void MigrateSettings(string installDir)
+    {
+        try
+        {
+            string target = DataDirSettingsPath();
+            if (File.Exists(target))
+                return;
+
+            string source = SettingsPath(installDir);
+            if (!File.Exists(source))
+                return;
+
+            Directory.CreateDirectory(App.DataDir);
+            File.Copy(source, target, overwrite: false);
+            App.Log($"RawAccel: settings.json migrated to {target}");
+        }
+        catch (Exception ex)
+        {
+            App.Log($"RawAccel: settings migration failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
     /// <summary>Распакован ли официальный Raw Accel в указанную папку.</summary>
     public static bool IsUnpacked(string installDir)
     {

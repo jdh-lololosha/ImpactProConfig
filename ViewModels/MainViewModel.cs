@@ -76,7 +76,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _motionSyncEnable;
     private int _ledModeIndex;
     private int _ledSpeed = 3;
-    private int _ledBrightnessIndex = 5;
+    private int _ledBrightness = 128;
     private int _keyDebounceMs;
     private int _sleepIndex = -1;
     private bool _autostartEnabled;
@@ -260,7 +260,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         for (int i = 0; i < _dpiSlots.Length; i++)
         {
             int idx = i;
-            _dpiSlots[i] = new DpiSlotViewModel { SlotIndex = i, Edited = _ => OnDpiEdited(idx) };
+            _dpiSlots[i] = new DpiSlotViewModel { SlotIndex = i, Edited = _ => OnDpiEdited(idx), ColorEdited = _ => OnDpiColorEdited(idx) };
         }
 
         // Маркеры 1..6 по изображению dev3.png (холст 432×356; центр маркера).
@@ -871,15 +871,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public int LedBrightnessIndex
+    public int LedBrightness
     {
-        get => _ledBrightnessIndex;
+        get => _ledBrightness;
         set
         {
-            int clamped = Math.Clamp(value, 1, 10);
-            if (!Set(ref _ledBrightnessIndex, clamped) || _loading)
+            int clamped = Math.Clamp(value, 0, 255);
+            if (!Set(ref _ledBrightness, clamped) || _loading)
                 return;
-            _working.dpiLed.brightness = BrightnessIndexToByte(clamped);
+            _working.dpiLed.brightness = (byte)clamped;
             MarkDirty();
             UpdateLedStatusText();
         }
@@ -1555,7 +1555,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         int modeIndex = led.enable == 0 ? 0 : led.mode == 2 ? 2 : 1;
         Set(ref _ledModeIndex, modeIndex, nameof(LedModeIndex));
         Set(ref _ledSpeed, Math.Clamp((int)led.breathSpeed, 1, 5), nameof(LedSpeed));
-        Set(ref _ledBrightnessIndex, BrightnessByteToIndex(led.brightness), nameof(LedBrightnessIndex));
+        Set(ref _ledBrightness, Math.Clamp((int)led.brightness, 0, 255), nameof(LedBrightness));
         UpdateLedStatusText();
     }
 
@@ -1567,7 +1567,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void UpdateLedStatusText() => LedStatusText = _working.dpiLed.enable == 0
         ? "Выключен"
-        : $"{LedModeOptions[Math.Clamp(_ledModeIndex, 0, 2)]} · яркость {_ledBrightnessIndex}/10 · скорость {_ledSpeed}/5";
+        : $"{LedModeOptions[Math.Clamp(_ledModeIndex, 0, 2)]} · яркость {_ledBrightness}/255 · скорость {_ledSpeed}/5";
 
     #endregion
 
@@ -1585,6 +1585,25 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         MarkDirty();
         if (index == _selectedDpiIndex)
             OnPropertyChanged(nameof(SelectedDpiValue));
+    }
+
+    private void OnDpiColorEdited(int index)
+    {
+        if (_loading)
+            return;
+        var c = _dpiSlots[index].Color;
+        _working.dpiConfig[index].color[0] = c.R;
+        _working.dpiConfig[index].color[1] = c.G;
+        _working.dpiConfig[index].color[2] = c.B;
+        MarkDirty();
+    }
+
+    /// <summary>Выбор цвета ступени из UI (ColorPicker): пишет в _working + MarkDirty.</summary>
+    public void SetDpiColor(int slot, byte r, byte g, byte b)
+    {
+        if ((uint)slot >= (uint)_dpiSlots.Length)
+            return;
+        _dpiSlots[slot].SetColor(r, g, b);
     }
 
     private void OnButtonActionChanged(ButtonSlotViewModel slot, int actionIndex)
@@ -1928,27 +1947,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public static string FormatVersion(int version) =>
         "v" + (version >> 8).ToString("x") + "." + (version & 0xFF).ToString("x2");
 
-    /// <summary>ValueConvert.DPIIndexToBrightness (индекс 1..10 → байт).</summary>
-    public static byte BrightnessIndexToByte(int index) => index switch
-    {
-        1 => 16,
-        5 => 128,
-        9 => 230,
-        10 => 255,
-        >= 2 and <= 8 => (byte)(30 * (index - 1)),
-        _ => 128
-    };
-
-    /// <summary>ValueConvert.DPIBrightnessToIndex (байт → индекс 1..10).</summary>
-    public static int BrightnessByteToIndex(byte value) => value switch
-    {
-        16 => 1,
-        128 => 5,
-        230 => 9,
-        255 => 10,
-        _ => value % 30 == 0 && value / 30 + 1 is >= 2 and <= 8 ? value / 30 + 1 : 5
-    };
-
     /// <summary>
     /// Постановка действия в UI-поток. Метод экземпляра (а не static), потому что
     /// после Dispose уже поставленные в очередь колбэки должны превратиться в no-op.
@@ -2081,6 +2079,7 @@ public sealed class DpiSlotViewModel : INotifyPropertyChanged
 
     public int SlotIndex { get; init; }
     public Action<DpiSlotViewModel>? Edited { get; init; }
+    public Action<DpiSlotViewModel>? ColorEdited { get; init; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -2120,6 +2119,19 @@ public sealed class DpiSlotViewModel : INotifyPropertyChanged
 
     /// <summary>Цвет ступени как Brush (биндинг Color→Brush в WPF не работает).</summary>
     public Brush ColorBrush => new SolidColorBrush(Color);
+
+    /// <summary>
+    /// Новый цвет ступени (RGB). Пишет в _color, обновляет Brush и уведомляет
+    /// владельца через ColorEdited — тот перенесёт байты в _working.dpiConfig.
+    /// </summary>
+    public void SetColor(byte r, byte g, byte b)
+    {
+        _color[0] = r;
+        _color[1] = g;
+        _color[2] = b;
+        Raise(nameof(ColorBrush));
+        ColorEdited?.Invoke(this);
+    }
 
     public bool IsSelected
     {
